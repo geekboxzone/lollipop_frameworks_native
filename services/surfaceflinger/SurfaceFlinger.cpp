@@ -79,6 +79,7 @@
 #include <cutils/compiler.h>
 
 #define DISPLAY_COUNT       1
+#define RK_SURFLGR_VERSION "1.000"
 
 /*
  * DEBUG_SCREENSHOTS: set to true to check that screenshots are not all
@@ -148,7 +149,11 @@ SurfaceFlinger::SurfaceFlinger()
         mPrimaryHWVsyncEnabled(false),
         mHWVsyncAvailable(false),
         mDaltonize(false),
-        mHasColorMatrix(false)
+        mHasColorMatrix(false),
+		mHardwareOrientation(0),
+        mUseLcdcComposer(0),
+        mSkipFlag(0),
+        mDelayFlag(0)
 {
     ALOGI("SurfaceFlinger is starting");
 
@@ -169,8 +174,15 @@ SurfaceFlinger::SurfaceFlinger()
             mDebugDDMS = 0;
         }
     }
+    property_get("debug.sf.fps", value, "0");
+    mDebugFPS = atoi(value);
     ALOGI_IF(mDebugRegion, "showupdates enabled");
     ALOGI_IF(mDebugDDMS, "DDMS debugging enabled");
+    property_get("ro.sf.hwrotation", value, "0");
+    mHardwareOrientation = atoi(value) / 90;
+    property_get("ro.sf.lcdc_composer", value, "0");
+    mUseLcdcComposer = atoi(value);
+    property_set("sys.ggsurflgr.version", RK_SURFLGR_VERSION);
 }
 
 void SurfaceFlinger::onFirstRef()
@@ -430,7 +442,7 @@ void SurfaceFlinger::init() {
             sp<DisplayDevice> hw = new DisplayDevice(this,
                     type, hwcId, mHwc->getFormat(hwcId), isSecure, token,
                     fbs, producer,
-                    mRenderEngine->getEGLConfig());
+                    mRenderEngine->getEGLConfig(), mHardwareOrientation);
             if (i > DisplayDevice::DISPLAY_PRIMARY) {
                 // FIXME: currently we don't get blank/unblank requests
                 // for displays other than the main display, so we always
@@ -469,6 +481,10 @@ void SurfaceFlinger::init() {
     // set initial conditions (e.g. unblank default device)
     initializeDisplays();
 
+    char value[PROPERTY_VALUE_MAX];
+    memset(value,0,PROPERTY_VALUE_MAX);
+    property_get("sys.enable.wfd.optimize", value, "0");
+    mWfdOptimize = atoi(value);
     // start boot animation
     startBootAnim();
 }
@@ -494,6 +510,22 @@ size_t SurfaceFlinger::getMaxViewportDims() const {
 
 // ----------------------------------------------------------------------------
 
+void SurfaceFlinger::debugShowFPS() const
+{
+    static int mFrameCount;
+    static int mLastFrameCount = 0;
+    static nsecs_t mLastFpsTime = 0;
+    static float mFps = 0;
+    mFrameCount++;
+    nsecs_t now = systemTime();
+    nsecs_t diff = now - mLastFpsTime;
+    if (diff > ms2ns(500)) {
+        mFps =  ((mFrameCount - mLastFrameCount) * float(s2ns(1))) / diff;
+        mLastFpsTime = now;
+        mLastFrameCount = mFrameCount;
+        ALOGD("mFps = %2.3f", mFps);
+    }
+ }
 bool SurfaceFlinger::authenticateSurfaceTexture(
         const sp<IGraphicBufferProducer>& bufferProducer) const {
     Mutex::Autolock _l(mStateLock);
@@ -825,6 +857,10 @@ void SurfaceFlinger::eventControl(int disp, int event, int enabled) {
 
 void SurfaceFlinger::onMessageReceived(int32_t what) {
     ATRACE_CALL();
+    if(mDelayFlag) {
+        usleep(20000);
+        mDelayFlag = 0;
+    }
     switch (what) {
     case MessageQueue::TRANSACTION:
         handleMessageTransaction();
@@ -852,14 +888,53 @@ void SurfaceFlinger::handleMessageInvalidate() {
     handlePageFlip();
 }
 
+static int frm_count = 0;
 void SurfaceFlinger::handleMessageRefresh() {
     ATRACE_CALL();
+   // struct timeval tpend1, tpend2;
+   // long usec1 = 0;
+   // gettimeofday(&tpend1,NULL);
+   // ALOGD("sf start");
     preComposition();
     rebuildLayerStacks();
     setUpHWComposer();
     doDebugFlashRegions();
     doComposition();
     postComposition();
+    if(frm_count++%300==0) {
+        frm_count = 1;
+        char value[PROPERTY_VALUE_MAX];
+        property_get("debug.sf.fps", value, "0");
+        mDebugFPS = atoi(value);
+    }
+    
+   // gettimeofday(&tpend2,NULL);
+   // usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;
+   // if((int)usec1 > 5)
+   // ALOGD("sf use time=%ld ms",usec1);
+#ifdef ENABLE_WFD_SKIP_FRAME
+     char value[PROPERTY_VALUE_MAX];
+     memset(value,0,PROPERTY_VALUE_MAX);
+     property_get("sys_graphic.wfdstatus", value, "false");
+     if (!strcmp(value,"true"))
+     {
+       memset(value,0,PROPERTY_VALUE_MAX);
+       property_get("sys_graphic.wfd.videosize", value, "0");
+       int type = atoi(value);
+       if (type == 3)
+       {
+         usleep(80000);
+       }
+       else if (type == 2)
+       {
+         usleep(20000);
+       }
+       else
+       {
+       }
+     }  
+#endif
+    //ALOGD("sf end");
 }
 
 void SurfaceFlinger::doDebugFlashRegions()
@@ -1072,6 +1147,9 @@ void SurfaceFlinger::setUpHWComposer() {
                      * and build the transparent region of the FB
                      */
                     const sp<Layer>& layer(currentLayers[i]);
+                #ifdef USE_PREPARE_FENCE
+                    layer->setAcquireFence(hw, *cur);
+                #endif
                     layer->setPerFrameData(hw, *cur);
                 }
             }
@@ -1096,10 +1174,22 @@ void SurfaceFlinger::setUpHWComposer() {
                 }
             }
         }
-
         status_t err = hwc.prepare();
         ALOGE_IF(err, "HWComposer::prepare failed (%s)", strerror(-err));
-
+#ifndef USE_PREPARE_FENCE
+        if (mUseLcdcComposer) {
+            for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+                sp<const DisplayDevice> hw(mDisplays[dpy]);
+                const int32_t id = hw->getHwcDisplayId();
+                if (id >= 0) {
+                    const bool hasHwcComposition = hwc.hasHwcComposition(id);
+                    if(!hasHwcComposition) {
+                        ReleaseOldBuffer();
+                    }
+                }
+            }
+        }
+#endif
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
             sp<const DisplayDevice> hw(mDisplays[dpy]);
             hw->prepareFrame(hwc);
@@ -1135,7 +1225,7 @@ void SurfaceFlinger::postFramebuffer()
 
     const nsecs_t now = systemTime();
     mDebugInSwapBuffers = now;
-
+    int r = 0;
     HWComposer& hwc(getHwComposer());
     if (hwc.initCheck() == NO_ERROR) {
         if (!hwc.supportsFramebufferTarget()) {
@@ -1144,7 +1234,18 @@ void SurfaceFlinger::postFramebuffer()
             //    for the current rendering API."
             getDefaultDisplayDevice()->makeCurrent(mEGLDisplay, mEGLContext);
         }
-        hwc.commit();
+        hwc.setSkipFrame(mSkipFlag);
+        mSkipFlag = 0;
+#ifdef TARGET_BOARD_PLATFORM_RK30XXB
+        hwc.fbs_post();
+#endif
+        r = hwc.commit();
+    }
+    if (mDebugFPS > 0) {    //add by qiuen
+        debugShowFPS();
+    }
+    if (mUseLcdcComposer) {
+        ReleaseOldBuffer();
     }
 
     // make the default display current because the VirtualDisplayDevice code cannot
@@ -1254,6 +1355,16 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
             for (size_t i=0 ; i<dc ; i++) {
                 const ssize_t j = curr.indexOfKey(draw.keyAt(i));
                 if (j < 0) {
+                       if (draw[i].type == HWC_DISPLAY_VIRTUAL)
+                       {
+                         char value[PROPERTY_VALUE_MAX];
+			             property_get("sys.cts_gts.status", value, "0");
+                         int IsCTS =  !strcmp(value,"true");
+                         if(IsCTS)
+                         {
+                            property_set("sys.hwc.compose_policy", "6");
+                         } 
+                       } 
                     // in drawing state but not in current state
                     if (!draw[i].isMainDisplay()) {
                         // Call makeCurrent() on the primary display so we can
@@ -1326,6 +1437,13 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                         // Virtual displays without a surface are dormant:
                         // they have external state (layer stack, projection,
                         // etc.) but no internal state (i.e. a DisplayDevice).
+		                char value[PROPERTY_VALUE_MAX];
+		                property_get("sys.cts_gts.status", value, "0");
+    		            int IsCTS =  !strcmp(value,"true");
+    		            if(IsCTS)
+  		                {
+       			          property_set("sys.hwc.compose_policy", "0");
+   		                }
                         if (state.surface != NULL) {
 
                             hwcDisplayId = allocateHwcDisplayId(state.type);
@@ -1355,7 +1473,7 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                                 state.type, hwcDisplayId,
                                 mHwc->getFormat(hwcDisplayId), state.isSecure,
                                 display, dispSurface, producer,
-                                mRenderEngine->getEGLConfig());
+                                mRenderEngine->getEGLConfig(),mHardwareOrientation);
                         hw->setLayerStack(state.layerStack);
                         hw->setProjection(state.orientation,
                                 state.viewport, state.frame);
@@ -1837,6 +1955,11 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
      */
 
     const Vector< sp<Layer> >& layers(hw->getVisibleLayersSortedByZ());
+    bool wfdOptimize = mWfdOptimize && (hw->getDisplayType()==DisplayDevice::DISPLAY_VIRTUAL) && (mUseLcdcComposer==false);
+    if (wfdOptimize)
+    {
+      engine.clearWithColor(0, 0, 0, 0);
+    }
     const size_t count = layers.size();
     const Transform& tr = hw->getTransform();
     if (cur != end) {
@@ -1860,7 +1983,23 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
                         break;
                     }
                     case HWC_FRAMEBUFFER: {
-                        layer->draw(hw, clip);
+                        if (!wfdOptimize)
+                        {
+                        	layer->draw(hw, clip);
+                        }
+                        break;
+                    }
+                    case HWC_BLITTER:  {
+                        if(count==4
+                        && !strcmp(layers[0]->getName(),"SurfaceView")
+                        && !strcmp(layers[1]->getName(),"com.android.launcher3/com.android.launcher3.WallpaperPickerActivity")
+                        && strstr(layers[2]->getName(),"com.android.")
+                        && !strcmp(layers[3]->getName(),"NavigationBar"))
+                        {
+                            mSkipFlag = 1;
+                            ALOGW("skip error frame");
+                            return true;
+                        }
                         break;
                     }
                     case HWC_FRAMEBUFFER_TARGET: {
@@ -1871,7 +2010,9 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
                     }
                 }
             }
+#ifndef USE_PREPARE_FENCE
             layer->setAcquireFence(hw, *cur);
+#endif
         }
     } else {
         // we're not using h/w composer
@@ -1880,7 +2021,10 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             const Region clip(dirty.intersect(
                     tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
+                if (!wfdOptimize)
+                {
                 layer->draw(hw, clip);
+                }
             }
         }
     }
@@ -2665,6 +2809,18 @@ SurfaceFlinger::getLayerSortedByZForHwcDisplay(int id) {
     return getDisplayDevice(dpy)->getVisibleLayersSortedByZ();
 }
 
+bool SurfaceFlinger::ReleaseOldBuffer(void)
+{
+    if (mUseLcdcComposer) {
+        const LayerVector& currentLayers(mDrawingState.layersSortedByZ);
+        size_t count = currentLayers.size();
+        for (size_t i=0 ; i<count ; i++) {
+            const sp<Layer>& layer(currentLayers[i]);      
+            layer->ReleaseOldBuffer();
+        }
+    }
+    return true;          
+}
 bool SurfaceFlinger::startDdmConnection()
 {
     void* libddmconnection_dso =
@@ -3078,6 +3234,13 @@ void SurfaceFlinger::renderScreenImplLocked(
     const uint32_t hw_h = hw->getHeight();
     const bool filtering = reqWidth != hw_w || reqWidth != hw_h;
 
+ 	HWComposer& hwc(getHwComposer());
+    if(mUseLcdcComposer)
+    {
+        if (hwc.initCheck() == NO_ERROR) {         
+            hwc.layerRecover();
+        }
+    }    
     // if a default or invalid sourceCrop is passed in, set reasonable values
     if (sourceCrop.width() == 0 || sourceCrop.height() == 0 ||
             !sourceCrop.isValid()) {
@@ -3112,23 +3275,49 @@ void SurfaceFlinger::renderScreenImplLocked(
 
     const LayerVector& layers( mDrawingState.layersSortedByZ );
     const size_t count = layers.size();
+    {
+      const int32_t id = hw->getHwcDisplayId();
+      HWComposer::LayerListIterator cur = hwc.begin(id);
+      HWComposer::LayerListIterator end = hwc.end(id);
+      for (;cur!=end;++cur)
+      {
+          hwc_layer_1_t* hwcLayer = cur->gethwcLayer();
+          hwc.videoCopyBit(hwcLayer,1);
+      }
+    }
     for (size_t i=0 ; i<count ; ++i) {
         const sp<Layer>& layer(layers[i]);
         const Layer::State& state(layer->getDrawingState());
         if (state.layerStack == hw->getLayerStack()) {
             if (state.z >= minLayerZ && state.z <= maxLayerZ) {
                 if (layer->isVisible()) {
+                    if (!strcmp("excluded-window", layer->getName().string())) {
+                        continue;
+                    }
                     if (filtering) layer->setFiltering(true);
+					layer->setDrawingScreenshot(true);
                     layer->draw(hw, useIdentityTransform);
+ 					layer->setDrawingScreenshot(false);
                     if (filtering) layer->setFiltering(false);
                 }
             }
         }
     }
 
+   {
+     const int32_t id = hw->getHwcDisplayId();
+     HWComposer::LayerListIterator cur = hwc.begin(id);
+     HWComposer::LayerListIterator end = hwc.end(id);
+     for (;cur!=end;++cur)
+     {
+         hwc_layer_1_t* hwcLayer = cur->gethwcLayer();
+         hwc.videoCopyBit(hwcLayer,0);//reset video
+     }
+   }
     // compositionComplete is needed for older driver
     hw->compositionComplete();
     hw->setViewportAndProjection();
+    mDelayFlag = 1;
 }
 
 
