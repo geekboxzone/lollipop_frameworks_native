@@ -14,12 +14,6 @@
  ** limitations under the License.
  */
 
-#define LOG_TAG "EGL_Loader"
-// #define ENABLE_DEBUG_LOG
-// #define ENABLE_VERBOSE_LOG
-#include <log/custom_log.h>
-#include <log/call_stack.h>
-
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -43,10 +37,6 @@
 namespace android {
 // ----------------------------------------------------------------------------
 
-// 当前对 gl 接口具体实现的 so_lib (driver) 的完整路径.
-static char sImplSoLibPath[PATH_MAX];
-
-static bool isAddrWithInImplSoLib(const void* addr);
 
 /*
  * EGL userspace drivers must be provided either:
@@ -172,7 +162,6 @@ Loader::~Loader() {
 }
 
 static void* load_wrapper(const char* path) {
-    D("to dlopen file '%s'.", path);
     void* so = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     ALOGE_IF(!so, "dlopen(\"%s\") failed: %s", path, dlerror());
     return so;
@@ -228,31 +217,17 @@ void Loader::init_api(void* dso,
         __eglMustCastToProperFunctionPointerType* curr,
         getProcAddressType getProcAddress)
 {
-    // DUMP_CALL_STACK();
-
     const ssize_t SIZE = 256;
     char scrap[SIZE];
     while (*api) {
         char const * name = *api;
-        V("to look for symbol '%s' in 'dso'.", name);
         __eglMustCastToProperFunctionPointerType f =
             (__eglMustCastToProperFunctionPointerType)dlsym(dso, name);
         if (f == NULL) {
             // couldn't find the entry-point, use eglGetProcAddress()
-            V("couldn't find the entry-point '%s', to use eglGetProcAddress().", name);
             f = getProcAddress(name);
         }
-        else {
-            V("found entry-point '%s', with addr '%p'.", name, f);
-
-            if ( !(isAddrWithInImplSoLib( (void*)f) ) ) {
-                V("'f' is not in impl_so_lib, to use eglGetProcAddress() to search for it.", name);
-                f = getProcAddress(name);
-            }
-        }
-
         if (f == NULL) {
-            V("couldn't find the entry-point '%s', to try without the OES postfix.", name);
             // Try without the OES postfix
             ssize_t index = ssize_t(strlen(name)) - 3;
             if ((index>0 && (index<SIZE-1)) && (!strcmp(name+index, "OES"))) {
@@ -262,9 +237,7 @@ void Loader::init_api(void* dso,
                 //ALOGD_IF(f, "found <%s> instead", scrap);
             }
         }
-
         if (f == NULL) {
-            V("couldn't find the entry-point '%s', to try with OES postfix.", name);
             // Try with the OES postfix
             ssize_t index = ssize_t(strlen(name)) - 3;
             if (index>0 && strcmp(name+index, "OES")) {
@@ -273,9 +246,7 @@ void Loader::init_api(void* dso,
                 //ALOGD_IF(f, "found <%s> instead", scrap);
             }
         }
-
         if (f == NULL) {
-            V("can not find symbol '%s' after all.", name);
             //ALOGD("%s", name);
             f = (__eglMustCastToProperFunctionPointerType)gl_unimplemented;
 
@@ -292,7 +263,6 @@ void Loader::init_api(void* dso,
                 f = (__eglMustCastToProperFunctionPointerType)gl_noop;
             }
         }
-
         *curr++ = f;
         api++;
     }
@@ -402,15 +372,12 @@ void *Loader::load_driver(const char* kind,
     };
 
 
-    I("to find impl_so_lib of kind '%s'.", kind);
     String8 absolutePath = MatchFile::find(kind);
     if (absolutePath.isEmpty()) {
         // this happens often, we don't want to log an error
         return 0;
     }
     const char* const driver_absolute_path = absolutePath.string();
-    strcpy(sImplSoLibPath, driver_absolute_path);
-    I("to dlopen impl_so_lib '%s'.", driver_absolute_path);
     void* dso = dlopen(driver_absolute_path, RTLD_NOW | RTLD_LOCAL);
     if (dso == 0) {
         const char* err = dlerror();
@@ -421,8 +388,6 @@ void *Loader::load_driver(const char* kind,
     ALOGD("loaded %s,maks=%x,EGL=%x", driver_absolute_path,mask ,EGL);
 
     if (mask & EGL) {
-        I("to init api of EGL.");
-
         getProcAddress = (getProcAddressType)dlsym(dso, "eglGetProcAddress");
 
         ALOGE_IF(!getProcAddress,
@@ -434,38 +399,40 @@ void *Loader::load_driver(const char* kind,
         char const * const * api = egl_names;
         while (*api) {
 
+            #if 0
             char const * name = *api;
-            V("to search for entry_point '%s'.", name);
             __eglMustCastToProperFunctionPointerType f =
                 (__eglMustCastToProperFunctionPointerType)dlsym(dso, name);
           
             if (f == NULL) {
                 // couldn't find the entry-point, use eglGetProcAddress()
-                V("could not find entry_point '%s' with dlsym, to use 'getProcAddress'.", name);
                 f = getProcAddress(name);            
                 if (f == NULL) {
-                    V("entry_point '%s' is not found, to set to null.", name);
+                
                     f = (__eglMustCastToProperFunctionPointerType)0;
                 }
             }
-            else {
-                if ( !(isAddrWithInImplSoLib( (void*)f) ) ) {
-                    V("'f' is not in impl_so_lib, to use 'getProcAddress' to search for it.", name);
-                    f = getProcAddress(name);
-                    if (f == NULL) {
-                        V("entry_point '%s' is not found, to set to null.", name);
-                        f = (__eglMustCastToProperFunctionPointerType)0;
-                    }
+            #else
+
+            char const * name = *api;
+            __eglMustCastToProperFunctionPointerType f = getProcAddress(name);
+           //ALOGD("api name=%s,f=%p",name,f);                      
+            if (f == NULL) {
+                // couldn't find the entry-point, use eglGetProcAddress()
+                f =  (__eglMustCastToProperFunctionPointerType)dlsym(dso, name);
+                //ALOGD("eglMustCastToProper name=%s,f=%p",name,f);
+                if (f == NULL) {
+                   // ALOGE("getProcAddress NULL");
+                    f = (__eglMustCastToProperFunctionPointerType)0;
                 }
             }
-
+            #endif
             *curr++ = f;
             api++;
         }
     }
 
     if (mask & GLESv1_CM) {
-        I("to init api of GLESv1_CM.");
         init_api(dso, gl_names,
             (__eglMustCastToProperFunctionPointerType*)
                 &cnx->hooks[egl_connection_t::GLESv1_INDEX]->gl,
@@ -473,36 +440,13 @@ void *Loader::load_driver(const char* kind,
     }
 
     if (mask & GLESv2) {
-        I("to init api of GLESv2.");
-        init_api(dso, gl_names,
+      init_api(dso, gl_names,
             (__eglMustCastToProperFunctionPointerType*)
                 &cnx->hooks[egl_connection_t::GLESv2_INDEX]->gl,
             getProcAddress);
     }
-    I("load_driver complete.");
 
     return dso;
-}
-
-static bool isAddrWithInImplSoLib(const void* addr) {
-    Dl_info addrInfo;
-    const char* pHostSoLib = NULL;
-
-    if ( 0 == dladdr(addr, &addrInfo) )   // dladdr() returns 0 on error, and nonzero on success.
-    {
-        E("fail to dladdr for symbol_addr '%s'.", addr);
-        return false;
-    }
-    pHostSoLib = addrInfo.dli_fname;
-
-    if ( 0 == strcmp(pHostSoLib, sImplSoLibPath + strlen(sImplSoLibPath) - strlen(pHostSoLib) ) ) {
-        V("'addr' IS in impl_so_lib");
-        return true;
-    }
-    else {
-        V("'addr' in so_lib '%s', not impl_so_lib.", addrInfo.dli_fname);
-        return false;
-    }
 }
 
 // ----------------------------------------------------------------------------
