@@ -279,7 +279,6 @@ void *Loader::load_driver(const char* kind,
             pattern.appendFormat("lib%s", kind);
             const char* const searchPaths[] = {
 #if defined(__LP64__)
-   
                     "/vendor/lib64/egl",
                     "/system/lib64/egl"
 #else
@@ -378,6 +377,7 @@ void *Loader::load_driver(const char* kind,
         return 0;
     }
     const char* const driver_absolute_path = absolutePath.string();
+
     void* dso = dlopen(driver_absolute_path, RTLD_NOW | RTLD_LOCAL);
     if (dso == 0) {
         const char* err = dlerror();
@@ -385,7 +385,7 @@ void *Loader::load_driver(const char* kind,
         return 0;
     }
 
-    ALOGD("loaded %s,maks=%x,EGL=%x", driver_absolute_path,mask ,EGL);
+    ALOGD("loaded %s", driver_absolute_path);
 
     if (mask & EGL) {
         getProcAddress = (getProcAddressType)dlsym(dso, "eglGetProcAddress");
@@ -398,35 +398,16 @@ void *Loader::load_driver(const char* kind,
             (__eglMustCastToProperFunctionPointerType*)egl;
         char const * const * api = egl_names;
         while (*api) {
-
-            #if 0
             char const * name = *api;
             __eglMustCastToProperFunctionPointerType f =
                 (__eglMustCastToProperFunctionPointerType)dlsym(dso, name);
-          
             if (f == NULL) {
                 // couldn't find the entry-point, use eglGetProcAddress()
-                f = getProcAddress(name);            
+                f = getProcAddress(name);
                 if (f == NULL) {
-                
                     f = (__eglMustCastToProperFunctionPointerType)0;
                 }
             }
-            #else
-
-            char const * name = *api;
-            __eglMustCastToProperFunctionPointerType f = getProcAddress(name);
-           //ALOGD("api name=%s,f=%p",name,f);                      
-            if (f == NULL) {
-                // couldn't find the entry-point, use eglGetProcAddress()
-                f =  (__eglMustCastToProperFunctionPointerType)dlsym(dso, name);
-                //ALOGD("eglMustCastToProper name=%s,f=%p",name,f);
-                if (f == NULL) {
-                   // ALOGE("getProcAddress NULL");
-                    f = (__eglMustCastToProperFunctionPointerType)0;
-                }
-            }
-            #endif
             *curr++ = f;
             api++;
         }
