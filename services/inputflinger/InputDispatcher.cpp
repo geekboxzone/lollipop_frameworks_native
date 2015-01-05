@@ -1771,6 +1771,15 @@ void InputDispatcher::pokeUserActivityLocked(const EventEntry* eventEntry) {
             return;
         }
         eventType = USER_ACTIVITY_EVENT_BUTTON;
+        //------modify begin for button & keyboard backlight by cx@rock-chips.com------
+        if ((keyEntry->keyCode == AKEYCODE_HOME
+            || keyEntry->keyCode == AKEYCODE_BACK
+            || keyEntry->keyCode == AKEYCODE_MENU)
+            && keyEntry->scanCode != 0) {
+            eventType = USER_ACTIVITY_EVENT_CAPACITIVE_BUTTON;
+            //ALOGD("pokeUserActivityLocked capacitive button");
+        }
+        //------modify end------
         break;
     }
     }

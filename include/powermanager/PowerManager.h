@@ -28,8 +28,11 @@ enum {
     USER_ACTIVITY_EVENT_OTHER = 0,
     USER_ACTIVITY_EVENT_BUTTON = 1,
     USER_ACTIVITY_EVENT_TOUCH = 2,
+    //------modify begin for button & keyboard backlight by cx@rock-chips.com------
+    USER_ACTIVITY_EVENT_CAPACITIVE_BUTTON = 3,
 
-    USER_ACTIVITY_EVENT_LAST = USER_ACTIVITY_EVENT_TOUCH, // Last valid event code.
+    USER_ACTIVITY_EVENT_LAST = USER_ACTIVITY_EVENT_CAPACITIVE_BUTTON, // Last valid event code.
+    //------modify end------
 };
 
 }; // namespace android
