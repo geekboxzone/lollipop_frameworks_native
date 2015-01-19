@@ -680,8 +680,8 @@ status_t HWComposer::prepare() {
 
     int err = mHwc->prepare(mHwc, mNumDisplays, mLists);
     ALOGE_IF(err, "HWComposer: prepare failed (%s)", strerror(-err));
-#ifdef USE_LCDC_COMPOSER
-    if(true)
+#if (defined USE_LCDC_COMPOSER) || (defined USE_X86)
+    if(true) 
 #else
     if(mFlinger->mUseLcdcComposer)
 #endif
@@ -707,7 +707,8 @@ status_t HWComposer::prepare() {
 				}
                 TotalSize += (rt->right - rt->left) * (rt->bottom - rt->top);
                 if ( l.compositionType == HWC_OVERLAY ||
-                     l.compositionType == HWC_LCDC )
+                     l.compositionType == HWC_LCDC ||
+                     l.bufferCount > 1)
                 {
                     NeedRepaint = true;
                 }
