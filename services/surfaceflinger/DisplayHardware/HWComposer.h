@@ -100,7 +100,7 @@ public:
     status_t layerRecover();
     status_t setSkipFrame(  uint32_t skipflag ) ;
 
-	status_t videoCopyBit(hwc_layer_1_t* hwcLayer, int flag);
+    status_t videoCopyBit(hwc_layer_1_t* hwcLayer, int flag);
     status_t setPowerMode(int disp, int mode);
 
     // set active config
@@ -119,7 +119,7 @@ public:
 
     // does this display have layers handled by GLES
     bool hasGlesComposition(int32_t id) const;
-  // rk: does this display have layers handled by Blit (rga)
+    // rk: does this display have layers handled by Blit (rga)
     bool hasBlitComposition(int32_t id) const;
     bool hasLcdComposition(int32_t id) const;
     // get the releaseFence file descriptor for a display's framebuffer layer.
@@ -183,7 +183,7 @@ public:
         virtual void setAcquireFenceFd(int fenceFd) = 0;
         virtual void setPlaneAlpha(uint8_t alpha) = 0;
         virtual void onDisplayed() = 0;
-		virtual void setLayername( const char *layername) = 0;
+        virtual void setLayername( const char *layername) = 0;
     };
 
     /*
@@ -342,7 +342,7 @@ private:
         uint32_t format;    // pixel format from FB hal, for pre-hwc-1.1
         bool connected;
         bool hasFbComp;
-        bool hasBlitComp;        
+        bool hasBlitComp;
         bool hasOvComp;
         bool haslcdComp;
         size_t capacity;

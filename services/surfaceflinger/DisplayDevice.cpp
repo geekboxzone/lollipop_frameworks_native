@@ -60,7 +60,7 @@ DisplayDevice::DisplayDevice(
         const sp<DisplaySurface>& displaySurface,
         const sp<IGraphicBufferProducer>& producer,
         EGLConfig config,
-		int hardwareOrientation)
+        int hardwareOrientation)
     : lastCompositionHadVisibleLayers(false),
       mFlinger(flinger),
       mType(type), mHwcDisplayId(hwcId),
@@ -77,7 +77,7 @@ DisplayDevice::DisplayDevice(
       mOrientation(),
       mPowerMode(HWC_POWER_MODE_OFF),
       mActiveConfig(0),
-	  mHardwareOrientation(hardwareOrientation)
+      mHardwareOrientation(hardwareOrientation)
 {
     mNativeWindow = new Surface(producer, false);
     ANativeWindow* const window = mNativeWindow.get();
@@ -238,7 +238,6 @@ status_t DisplayDevice::prepareFrame(const HWComposer& hwc) const {
     return mDisplaySurface->prepareFrame(compositionType);
 }
 
-
 void DisplayDevice::swapBuffers(HWComposer& hwc) const {
     // We need to call eglSwapBuffers() if:
     //  (1) we don't have a hardware composer, or
@@ -246,7 +245,7 @@ void DisplayDevice::swapBuffers(HWComposer& hwc) const {
     //    (a) we have framebuffer target support (not present on legacy
     //        devices, where HWComposer::commit() handles things); or
     //    (b) this is a virtual display
-    if (hwc.initCheck() != NO_ERROR || 
+    if (hwc.initCheck() != NO_ERROR ||
             ((hwc.hasGlesComposition(mHwcDisplayId)/*|| hwc.hasBlitComposition(mHwcDisplayId)*/) &&
              (hwc.supportsFramebufferTarget() || mType >= DISPLAY_VIRTUAL))) {
         EGLBoolean success = eglSwapBuffers(mDisplay, mSurface);

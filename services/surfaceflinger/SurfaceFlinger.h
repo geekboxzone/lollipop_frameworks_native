@@ -148,7 +148,7 @@ public:
 
     int mHardwareOrientation;
     int mUseLcdcComposer;
-	Mutex  mCaptureScreenLock;
+    Mutex  mCaptureScreenLock;
     // Get hardware orientation
     int getHardwareOrientation() const { return mHardwareOrientation; }
     bool orientationSwap() const { return mHardwareOrientation % 2; }

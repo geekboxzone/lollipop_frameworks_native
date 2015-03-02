@@ -233,7 +233,7 @@ private:
     int mPowerMode;
     // Current active config
     int mActiveConfig;
-	int mHardwareOrientation;
+    int mHardwareOrientation;
 };
 
 }; // namespace android

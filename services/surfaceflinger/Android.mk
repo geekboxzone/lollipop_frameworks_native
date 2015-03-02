@@ -76,7 +76,7 @@ ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3368)
 endif
 
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),sofia3gr)
-LOCAL_CFLAGS += -DUSE_X86
+    LOCAL_CFLAGS += -DUSE_SOFIA3GR
 endif
 
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk30xxb)
@@ -108,14 +108,15 @@ else
 endif
 
 ifeq ($(strip $(BOARD_USE_LCDC_COMPOSER)),true)
-LOCAL_CFLAGS += -DUSE_LCDC_COMPOSER
-ifeq ($(strip $(BOARD_LCDC_COMPOSER_LANDSCAPE_ONLY)),false)
-LOCAL_CFLAGS += -DLCDC_COMPOSER_FULL_ANGLE
-endif
+    LOCAL_CFLAGS += -DUSE_LCDC_COMPOSER
+    ifeq ($(strip $(BOARD_LCDC_COMPOSER_LANDSCAPE_ONLY)),false)
+        LOCAL_CFLAGS += -DLCDC_COMPOSER_FULL_ANGLE
+    endif
 endif
 ifeq ($(strip $(BOARD_ENABLE_WFD_SKIP_FRAME)),true)
-LOCAL_CFLAGS += -DENABLE_WFD_SKIP_FRAME
+    LOCAL_CFLAGS += -DENABLE_WFD_SKIP_FRAME
 endif
+
 LOCAL_CFLAGS += -fvisibility=hidden -Werror=format
 LOCAL_CFLAGS += -std=c++11
 

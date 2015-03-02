@@ -81,8 +81,8 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
         mHasSurface(false),
         mClientRef(client),
         mPotentialCursor(false),
-		mDrawingScreenshot(false)
-		
+        mDrawingScreenshot(false)
+
 {
     mCurrentCrop.makeInvalid();
     mFlinger->getRenderEngine().genTextures(1, &mTextureName);
@@ -116,7 +116,7 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
     nsecs_t displayPeriod =
             flinger->getHwComposer().getRefreshPeriod(HWC_DISPLAY_PRIMARY);
     mFrameTracker.setDisplayRefreshPeriod(displayPeriod);
-	mLastRealtransform = 0;
+    mLastRealtransform = 0;
 }
 
 void Layer::onFirstRef() {
@@ -149,7 +149,7 @@ void Layer::onFirstRef() {
             realtransform = (realtransform << 24) & GRALLOC_USAGE_ROT_MASK;
             mSurfaceFlingerConsumer->setConsumerUsageBits(getEffectiveUsage(realtransform));
         }
-    }    
+    }
 }
 
 Layer::~Layer() {
@@ -176,16 +176,16 @@ void Layer::onLayerDisplayed(const sp<const DisplayDevice>& /* hw */,
 void Layer::onFrameAvailable() {
     android_atomic_inc(&mQueuedFrames);
     mFlinger->signalLayerUpdate();
-	if (mFlinger->mUseLcdcComposer && strcmp("com.android.systemui.ImageWallpaper", getName().string()))
-	{
-		const sp<const DisplayDevice> hw(mFlinger->getDefaultDisplayDevice());
-		uint32_t realtransform = (hw->getTransform(false)).getOrientation() | 0x08;
-	    if (mLastRealtransform!=realtransform) {
-	        mLastRealtransform = realtransform;
-	        realtransform = (realtransform << 24) & GRALLOC_USAGE_ROT_MASK;
-	        mSurfaceFlingerConsumer->setConsumerUsageBits(getEffectiveUsage(realtransform));
-			}
-		}	
+    if (mFlinger->mUseLcdcComposer && strcmp("com.android.systemui.ImageWallpaper", getName().string()))
+    {
+        const sp<const DisplayDevice> hw(mFlinger->getDefaultDisplayDevice());
+        uint32_t realtransform = (hw->getTransform(false)).getOrientation() | 0x08;
+        if (mLastRealtransform!=realtransform) {
+            mLastRealtransform = realtransform;
+            realtransform = (realtransform << 24) & GRALLOC_USAGE_ROT_MASK;
+            mSurfaceFlingerConsumer->setConsumerUsageBits(getEffectiveUsage(realtransform));
+        }
+    }
 }
 
 void Layer::onSidebandStreamChanged() {
@@ -423,11 +423,11 @@ void Layer::setGeometry(
 
     // this gives us only the "orientation" component of the transform
     const State& s(getDrawingState());
-#ifndef USE_LCDC_COMPOSER    
+#ifndef USE_LCDC_COMPOSER
     if (s.alpha < 0xFF) {
         layer.setSkip(true);   // 32lcdc can support ,so it dont skip
-    } 
-#endif    
+    }
+#endif
     if (!isOpaque(s) || s.alpha != 0xFF) {
         layer.setBlending( (mPremultipliedAlpha ?
                 HWC_BLENDING_PREMULT :
@@ -482,19 +482,19 @@ void Layer::setGeometry(
     if (orientation & Transform::ROT_INVALID) {
         // we can only handle simple transformation
         if(fd_dvfs < 0)
-            fd_dvfs = open("/sys/devices/ffa30000.gpu/dvfs", O_RDWR, 0);   
-        if(fd_dvfs > 0 && dvfs_stat == 0)    
-        {         
-            write(fd_dvfs,"off",3);  
+            fd_dvfs = open("/sys/devices/ffa30000.gpu/dvfs", O_RDWR, 0);
+        if(fd_dvfs > 0 && dvfs_stat == 0)
+        {
+            write(fd_dvfs,"off",3);
             dvfs_stat = 1;
-        }                
+        }
         layer.setSkip(true);
     } else {
-        if(fd_dvfs > 0 && dvfs_stat == 1)    
-        {                   
+        if(fd_dvfs > 0 && dvfs_stat == 1)
+        {
             write(fd_dvfs,"on",2);
-           dvfs_stat = 0;
-        }                
+            dvfs_stat = 0;
+        }
         uint32_t realtransform = (hw->getTransform(false) * s.transform * bufferOrientation).getOrientation();
         layer.setTransform(orientation);
         if(mFlinger->mUseLcdcComposer )
@@ -509,7 +509,7 @@ void Layer::setGeometry(
             {
                 layer.setTransform(orientation); // Wallpaper force 0
             }
-        }    
+        }
     }
 }
 
@@ -531,7 +531,7 @@ void Layer::setPerFrameData(const sp<const DisplayDevice>& hw,
         // layer yet, or if we ran out of memory
         layer.setBuffer(mActiveBuffer);
     }
- 	layer.setLayername(getName().string());
+    layer.setLayername(getName().string());
 }
 
 void Layer::setAcquireFence(const sp<const DisplayDevice>& /* hw */,
@@ -541,9 +541,9 @@ void Layer::setAcquireFence(const sp<const DisplayDevice>& /* hw */,
     // TODO: there is a possible optimization here: we only need to set the
     // acquire fence the first time a new buffer is acquired on EACH display.
 
-   // if (layer.getCompositionType() == HWC_OVERLAY || layer.getCompositionType()==100) {
+    // if (layer.getCompositionType() == HWC_OVERLAY || layer.getCompositionType()==100) {
 #ifndef USE_PREPARE_FENCE
-        if (layer.getCompositionType() != HWC_FRAMEBUFFER) {   
+    if (layer.getCompositionType() != HWC_FRAMEBUFFER) {
 #endif
         sp<Fence> fence = mSurfaceFlingerConsumer->getCurrentFence();
         if (fence->isValid()) {
@@ -555,7 +555,7 @@ void Layer::setAcquireFence(const sp<const DisplayDevice>& /* hw */,
 #ifndef USE_PREPARE_FENCE
     }
 #else
-	ALOGV("isValid=%d,fenceFd=%d,name=%s",fence->isValid(),fenceFd,getName().string());
+    ALOGV("isValid=%d,fenceFd=%d,name=%s",fence->isValid(),fenceFd,getName().string());
 #endif
     layer.setAcquireFenceFd(fenceFd);
 }

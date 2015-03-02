@@ -113,8 +113,8 @@ HWComposer::HWComposer(
         // close FB HAL if we don't needed it.
         // FIXME: this is temporary until we're not forced to open FB HAL
         // before HWC.
-       // framebuffer_close(mFbDev);
-      //  mFbDev = NULL;
+        // framebuffer_close(mFbDev);
+        // mFbDev = NULL;
     }
 
     // If we have no HWC, or a pre-1.1 HWC, an FB dev is mandatory.
@@ -169,7 +169,7 @@ HWComposer::HWComposer(
                 "should only have fbdev if no hwc or hwc is 1.0");
 
         DisplayData& disp(mDisplayData[HWC_DISPLAY_PRIMARY]);
-        disp.connected = true;   
+        disp.connected = true;
         disp.format = mFbDev->format;
         DisplayConfig config = DisplayConfig();
         config.width = mFbDev->width;
@@ -680,8 +680,8 @@ status_t HWComposer::prepare() {
 
     int err = mHwc->prepare(mHwc, mNumDisplays, mLists);
     ALOGE_IF(err, "HWComposer: prepare failed (%s)", strerror(-err));
-#if (defined USE_LCDC_COMPOSER) || (defined USE_X86)
-    if(true) 
+#if (defined USE_LCDC_COMPOSER) || (defined USE_SOFIA3GR)
+    if(true)
 #else
     if(mFlinger->mUseLcdcComposer)
 #endif
@@ -701,10 +701,10 @@ status_t HWComposer::prepare() {
             for (size_t i=0 ; i<disp.list->numHwLayers ; i++) {
                 hwc_layer_1_t& l = disp.list->hwLayers[i];
                 hwc_rect_t const * rt = l.visibleRegionScreen.rects;
-				if (rt == NULL)
-				{
-				  return 0;
-				}
+                if (rt == NULL)
+                {
+                    return 0;
+                }
                 TotalSize += (rt->right - rt->left) * (rt->bottom - rt->top);
                 if ( l.compositionType == HWC_OVERLAY ||
                      l.compositionType == HWC_LCDC ||
@@ -716,7 +716,7 @@ status_t HWComposer::prepare() {
                     l.bufferUpdate = 0;
                     bool IsSmallTop = !strcmp("StatusBar", l.LayerName);
                     if(IsSmallTop) {
-                     
+
                         unsigned int size = (rt->right - rt->left) * (rt->bottom - rt->top);
                         IsSmallTop = (size < ((currentConfig.width * currentConfig.height)/4));
                     }
@@ -773,12 +773,12 @@ status_t HWComposer::prepare() {
                     //        i, l.compositionType, l.handle);
 
                     if (l.flags & HWC_SKIP_LAYER) {
-                       // l.compositionType = HWC_FRAMEBUFFER;
+                        // l.compositionType = HWC_FRAMEBUFFER;
                     }
                     if(l.compositionType == HWC_BLITTER)
-                    {  
+                    {
                         disp.hasBlitComp = true;
-                    }                    
+                    }
                     if (l.compositionType == HWC_FRAMEBUFFER) {
                         disp.hasFbComp = true;
                     }
@@ -860,20 +860,20 @@ status_t HWComposer::fbs_post(void)
 #endif
 status_t HWComposer::setSkipFrame(  uint32_t skipflag ) {
     int err = NO_ERROR;
-    if (mHwc) {             
+    if (mHwc) {
         for (size_t i=0 ; i<mNumDisplays ; i++) {
-            DisplayData& disp(mDisplayData[i]);         
-            if (disp.list) {      
-                disp.list->skipflag = skipflag;                   
+            DisplayData& disp(mDisplayData[i]);
+            if (disp.list) {
+                disp.list->skipflag = skipflag;
             }
         }
     }
     return (status_t)err;
 }
-status_t HWComposer::layerRecover( ) 
+status_t HWComposer::layerRecover( )
 {
     int err = NO_ERROR;
-    if (mHwc &&  mHwc->layer_recover ) {             
+    if (mHwc &&  mHwc->layer_recover ) {
         mHwc->layer_recover(mHwc, mNumDisplays, mLists);
     }
     return (status_t)err;
@@ -986,7 +986,7 @@ bool HWComposer::supportsFramebufferTarget() const {
 
 int HWComposer::fbPost(int32_t id,
         const sp<Fence>& acquireFence, const sp<GraphicBuffer>& buffer) {
-    bool fbcmp = mFlinger->mUseLcdcComposer ? !hasGlesComposition(id):true;    
+    bool fbcmp = mFlinger->mUseLcdcComposer ? !hasGlesComposition(id):true;
     if (mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)
         #ifndef USE_PREPARE_FENCE
         && fbcmp
@@ -994,15 +994,15 @@ int HWComposer::fbPost(int32_t id,
        ) {
         return setFramebufferTarget(id, acquireFence, buffer);
     } else {
-        DisplayData& disp(mDisplayData[id]);    
-        if (!mHwc || !disp.list->skipflag) 
+        DisplayData& disp(mDisplayData[id]);
+        if (!mHwc || !disp.list->skipflag)
         {
           if (acquireFence!=NULL)
           {
         acquireFence->waitForever("HWComposer::fbPost");
           }
         return mFbDev->post(mFbDev, buffer->handle);
-        }    
+        }
         else
             return NO_ERROR;
     }
@@ -1160,26 +1160,26 @@ public:
     }
     virtual void setRealTransform(uint32_t realtransform) {
         getLayer()->realtransform = realtransform;
-    }    
+    }
     virtual void setFrame(const Rect& frame) {
         getLayer()->displayFrame = reinterpret_cast<hwc_rect_t const&>(frame);
     }
     virtual void setCrop(const FloatRect& crop) {
         if (hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_3)) {
-            #if 0
+#if 0
             getLayer()->sourceCropf = reinterpret_cast<hwc_frect_t const&>(crop);
             hwc_rect_t& r = getLayer()->sourceCrop;
             r.left  = int(ceilf(crop.left));
             r.top   = int(ceilf(crop.top));
             r.right = int(floorf(crop.right));
             r.bottom= int(floorf(crop.bottom));
-            #else
+#else
             hwc_rect_t& r = getLayer()->sourceCrop;
             r.left  = int(ceilf(crop.left));
             r.top   = int(ceilf(crop.top));
             r.right = int(floorf(crop.right));
-            r.bottom= int(floorf(crop.bottom));   
-            #endif
+            r.bottom= int(floorf(crop.bottom));
+#endif
         } else {
             /*
              * Since h/w composer didn't support a flot crop rect before version 1.3,
@@ -1237,9 +1237,9 @@ public:
     virtual void setLayername(const char *layername) {
         int strlens ;
         strlens = strlen(layername);
-       strlens = strlens > LayerNameLength ? LayerNameLength:strlens;
-       memcpy(getLayer()->LayerName,layername,strlens);
-       getLayer()->LayerName[strlens] = 0;
+        strlens = strlens > LayerNameLength ? LayerNameLength:strlens;
+        memcpy(getLayer()->LayerName,layername,strlens);
+        getLayer()->LayerName[strlens] = 0;
     }
 };
 
