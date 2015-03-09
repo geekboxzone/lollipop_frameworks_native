@@ -1889,7 +1889,7 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
     HWComposer& hwc(getHwComposer());
     HWComposer::LayerListIterator cur = hwc.begin(id);
     const HWComposer::LayerListIterator end = hwc.end(id);
-
+    static int bootcnt = 0;
     bool hasGlesComposition = hwc.hasGlesComposition(id);
     if (hasGlesComposition) {
         if (!hw->makeCurrent(mEGLDisplay, mEGLContext)) {
@@ -1907,8 +1907,12 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         const bool haveBlit = hwc.hasBlitComposition(id);
         const bool haveLcdc = hwc.hasLcdComposition(id);
         const bool ismixVH = cur->getCompositionType() == HWC_MIX_V2;
-        
-        if (hasHwcComposition || haveBlit || haveLcdc || ismixVH)
+        if(bootcnt < 4)
+        {
+            bootcnt ++;
+            // do nothing ,for kernel->android 3 frames black
+        }
+        else if (hasHwcComposition || haveBlit || haveLcdc || ismixVH)
         {
             // when using overlays, we assume a fully transparent framebuffer
             // NOTE: we could reduce how much we need to clear, for instance
