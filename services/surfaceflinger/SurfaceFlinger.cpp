@@ -1947,10 +1947,13 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         }
 
         // Never touch the framebuffer if we don't have any framebuffer layers
+        bool  ismixVH = false;
         const bool hasHwcComposition = hwc.hasHwcComposition(id);
         const bool haveBlit = hwc.hasBlitComposition(id);
         const bool haveLcdc = hwc.hasLcdComposition(id);
-        const bool ismixVH = cur->getCompositionType() == HWC_MIX_V2;
+
+        if(id == 1 && cur != end)
+            ismixVH = cur->getCompositionType() == HWC_MIX_V2;
         if(bootcnt < 4)
         {
             bootcnt ++;
