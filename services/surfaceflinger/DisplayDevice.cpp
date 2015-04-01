@@ -114,8 +114,13 @@ DisplayDevice::DisplayDevice(
     mViewport.makeInvalid();
     mFrame.makeInvalid();
 
-    mViewport.set(bounds());
-    mFrame.set(bounds());
+    if (mFlinger->orientationSwap()) {
+        mViewport.set(Rect(mDisplayHeight, mDisplayWidth));
+        mFrame.set(Rect(mDisplayHeight, mDisplayWidth));
+    } else {
+        mViewport.set(bounds());
+        mFrame.set(bounds());
+    }
 
     // virtual displays are always considered enabled
     mPowerMode = (mType >= DisplayDevice::DISPLAY_VIRTUAL) ?
