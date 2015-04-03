@@ -146,13 +146,20 @@ public:
         return *mRenderEngine;
     }
 
+    // see DisplayDevice::mHardwareOrientation
     int mHardwareOrientation;
-    int mUseLcdcComposer;
-    Mutex  mCaptureScreenLock;
     // Get hardware orientation
     int getHardwareOrientation() const { return mHardwareOrientation; }
-    bool orientationSwap() const { return mHardwareOrientation % 2; }
+    /** 
+     * orientation_of_pre_rotated_display 是否是 90 度的整数倍.
+     * 若是, 则 pre_rotated_display 的 "宽度 和 高度", 将分别是 original_display 的 "高度 和 宽度".
+     */
+    bool orientationSwap() const { return mHardwareOrientation % 2; }       // .T : 改名称. 
+
+    int mUseLcdcComposer;
+	Mutex  mCaptureScreenLock;
     bool ReleaseOldBuffer(void);    //rk : for lcdc composer
+
 private:
     friend class Client;
     friend class DisplayEventConnection;
@@ -434,7 +441,7 @@ private:
             uint32_t minLayerZ, uint32_t maxLayerZ);
 
     void logFrameStats();
-
+    
     /* ------------------------------------------------------------------------
      * Attributes
      */
