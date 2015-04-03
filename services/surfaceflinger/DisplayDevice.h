@@ -82,7 +82,7 @@ public:
             const sp<DisplaySurface>& displaySurface,
             const sp<IGraphicBufferProducer>& producer,
             EGLConfig config,
-            int hardwareOrientation);
+            int hardwareOrientation);   // orientation_of_pre_rotated_display
 
     ~DisplayDevice();
 
@@ -222,10 +222,11 @@ private:
     /** 
      * 待显示的 layer_stack 以 original_display 为基准的 orientation.
      */
-    int mOrientation;    // 取值诸如 0, 1 (顺时针转过 90 度)
+    int mOrientation;    // 取值诸如 0, 1(顺时针转过 90 度), 2, 3.
     /** 
-     * hw_rotation_extension 引入的, 表征 client 请求的 display (pre_rotated_display) 的 orientation. 
-     * 待显示的 layer_stack 以 pre_rotated_display 为基准的 orientation.
+     * display_pre_rotation_extension 引入的, 
+     * 表征 client 请求的 display (display_saw_by_sf_clients) 的 orientation.
+     * 待显示的 layer_stack 以 display_saw_by_sf_clients 为基准的 orientation.
      */
     int mClientOrientation;
     // user-provided visible area of the layer stack
@@ -243,9 +244,10 @@ private:
     int mActiveConfig;
 
     /**
-     * .DP : preset_orientation : 
-     * hw_rotation_extension 引入的,
-     * 相对 original_display_default_orientation, 执行预定义旋转(pre_rotation) 之后的 default_orientation.
+     * .DP : orientation_of_pre_rotated_display : 
+     * display_pre_rotation_extension 引入的, 
+     * pre_rotated_display 的 default_orientation 相对 original_display 的 coordinate_system 的 orientation.
+     * 可能的取值诸如 0, 1(顺时针转过 90 度), 2(180 度), 3(270 度).
      *
      * wms 通过 sf 的 getdisplayconfigs 得到 display_info 都是 pre_rotated_display 的信息, 
      * 比如 pre_rotation 是顺时针转过 90 度, 则 pre_rotated_display 的高度是 original_display 的宽度, 宽度是高度. 

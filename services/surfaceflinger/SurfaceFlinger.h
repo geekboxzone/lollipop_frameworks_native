@@ -151,8 +151,8 @@ public:
     // Get hardware orientation
     int getHardwareOrientation() const { return mHardwareOrientation; }
     /** 
-     * preset_orientation 是否是 90 度的整数倍.
-     * 此时 pre_rotated_display 和 original_display 的宽高要对调.
+     * orientation_of_pre_rotated_display 是否是 90 度的整数倍.
+     * 若是, 则 pre_rotated_display 的 "宽度 和 高度", 将分别是 original_display 的 "高度 和 宽度".
      */
     bool orientationSwap() const { return mHardwareOrientation % 2; }       // .T : 改名称. 
 

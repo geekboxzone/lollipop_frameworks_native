@@ -179,6 +179,25 @@ SurfaceFlinger::SurfaceFlinger()
     ALOGI_IF(mDebugRegion, "showupdates enabled");
     ALOGI_IF(mDebugDDMS, "DDMS debugging enabled");
 
+    /**
+     * .DP : original_display : 
+     *      原始状态的 display, 长度, 高度, orientation 等配置, 由 kernel 层的对应 device 指定. 
+     *
+     * .DP : display_pre_rotation_extension; pre_rotation; pre_rotated_display, display_saw_by_sf_clients :
+     *      display_pre_rotation_extension 是 对 android 框架的扩展, 可以实现对 primary_display 的预旋转 (pre_rotation).  
+     *      pre_rotation 之后, sf(surface_flinger) 的 client (boot_animation, window_manager_service, ...) 看到的 primary_display, 
+     *      将是预旋转之后的 display, 记为 pre_rotated_display 或 display_saw_by_sf_clients. 
+     *      设备开发人员可以通过 属性 "ro.sf.hwrotation", 来配置 pre_rotation 的具体角度, 参见对 property_hwrotation 的说明. 
+     *      本扩展目前仅对 primary_display 有效. 
+     */
+
+    /**
+     * .DP : ro.sf.hwrotation, property_hwrotation : 
+     *      display_pre_rotation_extension 引入的, 系统预定义的 ro property, 定义在文件 /system/build.prop 中. 
+     *      用来描述希望在 original_display 上执行的 预旋转(pre_rotation) 在 顺时针方向上的 角度.
+     *      可能的取值是 0, 90, 180, 270.
+     */
+    // 读取 property_hwrotation, 并设置 orientation_of_pre_rotated_display.
     property_get("ro.sf.hwrotation", value, "0");
     mHardwareOrientation = atoi(value) / 90;
 
@@ -444,7 +463,8 @@ void SurfaceFlinger::init() {
             sp<DisplayDevice> hw = new DisplayDevice(this,
                     type, hwcId, mHwc->getFormat(hwcId), isSecure, token,
                     fbs, producer,
-                    mRenderEngine->getEGLConfig(), mHardwareOrientation);
+                    mRenderEngine->getEGLConfig(),
+                    mHardwareOrientation);
             if (i > DisplayDevice::DISPLAY_PRIMARY) {
                 // FIXME: currently we don't get blank/unblank requests
                 // for displays other than the main display, so we always
@@ -1497,7 +1517,7 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                                 mHwc->getFormat(hwcDisplayId), state.isSecure,
                                 display, dispSurface, producer,
                                 mRenderEngine->getEGLConfig(),
-                                mHardwareOrientation);      // .bug : hw_rotation_extension 只应该作用在 primary_display.
+                                0); // 'hardwareOrientation', 非 primary_display 不涉及 pre_rotation.
                         hw->setLayerStack(state.layerStack);
                         hw->setProjection(state.orientation,
                                 state.viewport, state.frame);
