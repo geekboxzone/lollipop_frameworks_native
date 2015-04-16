@@ -36,6 +36,7 @@
 
 #include <private/gui/ComposerService.h>
 
+#include <hardware/rga.h>
 namespace android {
 
 Surface::Surface(
@@ -65,6 +66,7 @@ Surface::Surface(
     mReqUsage = 0;
     mTimestamp = NATIVE_WINDOW_TIMESTAMP_AUTO;
     mCrop.clear();
+    mDirtyRect.clear();
     mScalingMode = NATIVE_WINDOW_SCALING_MODE_FREEZE;
     mTransform = 0;
     mStickyTransform = 0;
@@ -126,9 +128,12 @@ int Surface::hook_queueBuffer(ANativeWindow* window,
 int Surface::hook_dequeueBuffer_DEPRECATED(ANativeWindow* window,
         ANativeWindowBuffer** buffer) {
     Surface* c = getSelf(window);
-    ANativeWindowBuffer* buf;
+    ANativeWindowBuffer* buf = NULL;
     int fenceFd = -1;
     int result = c->dequeueBuffer(&buf, &fenceFd);
+
+    if (result != NO_ERROR) return result;
+
     sp<Fence> fence(new Fence(fenceFd));
     int waitResult = fence->waitForever("dequeueBuffer_DEPRECATED");
     if (waitResult != OK) {
@@ -170,6 +175,12 @@ int Surface::hook_perform(ANativeWindow* window, int operation, ...) {
     va_start(args, operation);
     Surface* c = getSelf(window);
     return c->perform(operation, args);
+}
+
+status_t Surface::setDirtyRect(const Rect* dirtyRect) {
+    Mutex::Autolock lock(mMutex);
+    mDirtyRect = *dirtyRect;
+    return NO_ERROR;
 }
 
 int Surface::setSwapInterval(int interval) {
@@ -315,10 +326,17 @@ int Surface::queueBuffer(android_native_buffer_t* buffer, int fenceFd) {
     Rect crop;
     mCrop.intersect(Rect(buffer->width, buffer->height), &crop);
 
+    Rect dirtyRect = mDirtyRect;
+    if(dirtyRect.isEmpty()) {
+        int drWidth = mUserWidth ? mUserWidth : mDefaultWidth;
+        int drHeight = mUserHeight ? mUserHeight : mDefaultHeight;
+        dirtyRect = Rect(drWidth, drHeight);
+    }
+
     sp<Fence> fence(fenceFd >= 0 ? new Fence(fenceFd) : Fence::NO_FENCE);
     IGraphicBufferProducer::QueueBufferOutput output;
     IGraphicBufferProducer::QueueBufferInput input(timestamp, isAutoTimestamp,
-            crop, mScalingMode, mTransform ^ mStickyTransform, mSwapIntervalZero,
+            crop, dirtyRect, mScalingMode, mTransform ^ mStickyTransform, mSwapIntervalZero,
             fence, mStickyTransform);
     status_t err = mGraphicBufferProducer->queueBuffer(i, input, &output);
     if (err != OK)  {
@@ -335,7 +353,7 @@ int Surface::queueBuffer(android_native_buffer_t* buffer, int fenceFd) {
     }
 
     mConsumerRunningBehind = (numPendingBuffers >= 2);
-
+    mDirtyRect.clear();
     return err;
 }
 
@@ -739,6 +757,32 @@ void Surface::freeAllBuffers() {
 
 // ----------------------------------------------------------------------
 // the lock/unlock APIs must be used from the same thread
+static int fd_rga=-1;
+
+int hwChangeRgaFormat( int fmt )
+{
+    switch (fmt)
+    {
+    case HAL_PIXEL_FORMAT_RGB_565:
+        return RK_FORMAT_RGB_565;
+    case HAL_PIXEL_FORMAT_RGB_888:
+        return RK_FORMAT_RGB_888;
+    case HAL_PIXEL_FORMAT_RGBA_8888:
+        return RK_FORMAT_RGBA_8888;
+    case HAL_PIXEL_FORMAT_RGBX_8888:
+        return RK_FORMAT_RGBX_8888;
+    case HAL_PIXEL_FORMAT_BGRA_8888:
+        return RK_FORMAT_BGRA_8888;
+    case HAL_PIXEL_FORMAT_YCrCb_NV12:
+        return RK_FORMAT_YCbCr_420_SP;
+	case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
+	   return RK_FORMAT_YCbCr_420_SP;
+    default:
+        return -1;
+    }
+}
+
+#ifndef USE_RGA_COPYBLT
 
 static status_t copyBlt(
         const sp<GraphicBuffer>& dst,
@@ -756,6 +800,7 @@ static status_t copyBlt(
     err = dst->lock(GRALLOC_USAGE_SW_WRITE_OFTEN, reg.bounds(), (void**)&dst_bits);
     ALOGE_IF(err, "error locking dst buffer %s", strerror(-err));
 
+#ifndef USE_LCDC_COMPOSER
     Region::const_iterator head(reg.begin());
     Region::const_iterator tail(reg.end());
     if (head != tail && src_bits && dst_bits) {
@@ -782,6 +827,121 @@ static status_t copyBlt(
         }
     }
 
+#else
+    int32_t vir_w = 0, vir_h = 0;
+    Region::const_iterator head_(reg.begin());
+    Region::const_iterator tail_(reg.end());
+    if (head_ != tail_ && src_bits && dst_bits) {
+        while (head_ != tail_) {
+            const Rect& r(*head_++);
+            ssize_t h_ = r.height();
+            if (h_ <= 0) continue;
+            int32_t tmp_w = r.right;
+            int32_t tmp_h = r.bottom;
+            vir_w = (vir_w >= tmp_w) ? vir_w : tmp_w;
+            vir_h = (vir_h >= tmp_h) ? vir_h : tmp_h;
+        }
+    }
+    head_ = reg.begin();
+    if (head_ != tail_ && src_bits && dst_bits) {
+        //const size_t bpp = bytesPerPixel(src->format);
+        bool needsync = false;
+        struct rga_req  Rga_Request;
+        if(fd_rga < 0){
+            property_set("sys.gui.version", "1.04");
+            fd_rga = open("/dev/rga",O_RDWR,0);
+            if(fd_rga < 0){
+                ALOGE(" rga open err");
+                goto ERROR;
+            }
+        }
+        while (head_ != tail_) {
+            if(needsync){
+                if(ioctl(fd_rga, RGA_BLIT_ASYNC, &Rga_Request) != 0){
+                    ALOGE("              rga ioctl  RGA_BLIT_ASYNC  err !!!!!!    fd_rga = %d", fd_rga);
+                    goto ERROR;
+                }
+            }
+            const Rect& r(*head_++);
+            ssize_t h = r.height();
+            if (h <= 0) continue;
+
+            memset(&Rga_Request,0x0,sizeof(Rga_Request));
+            //set src info
+            Rga_Request.src.yrgb_addr =  (int)src_bits; //(int)s;
+            Rga_Request.src.uv_addr  = 0;
+            Rga_Request.src.v_addr   =  Rga_Request.src.uv_addr;
+            Rga_Request.src.vir_w = src->stride;
+            Rga_Request.src.vir_h = vir_h;
+            Rga_Request.src.format = hwChangeRgaFormat(src->format);               // RK_FORMAT_RGBA_8888
+            Rga_Request.src.act_w = r.width();
+            Rga_Request.src.act_h = r.height();
+            Rga_Request.src.x_offset = r.left;
+            Rga_Request.src.y_offset = r.top;
+
+            //set dst info
+            Rga_Request.dst.yrgb_addr = (int)dst_bits;  //(int)d;
+            Rga_Request.dst.uv_addr  = 0;
+            Rga_Request.dst.v_addr   = Rga_Request.dst.uv_addr;
+            Rga_Request.dst.vir_w = dst->stride;
+            Rga_Request.dst.vir_h = vir_h;
+            Rga_Request.dst.act_w = r.width();
+            Rga_Request.dst.act_h = r.height();
+            Rga_Request.clip.xmin = 0;
+            Rga_Request.clip.xmax = Rga_Request.dst.vir_w - 1;
+            Rga_Request.clip.ymin = 0;
+            Rga_Request.clip.ymax = Rga_Request.dst.vir_h - 1;
+            Rga_Request.dst.x_offset = r.left;
+            Rga_Request.dst.y_offset = r.top;
+            
+            Rga_Request.sina = 0;
+            Rga_Request.cosa = 0x10000;
+            Rga_Request.dst.format = Rga_Request.src.format;               // RK_FORMAT_RGBA_8888
+
+            Rga_Request.alpha_rop_flag |= (1 << 5);
+
+            Rga_Request.mmu_info.mmu_en    = 1;
+            Rga_Request.mmu_info.mmu_flag  = ((2 & 0x3) << 4) | 1;
+
+            needsync = true;
+        }
+        if(needsync){
+            if(ioctl(fd_rga, RGA_BLIT_ASYNC, &Rga_Request) != 0){
+                ALOGE("          %s(%d):  RGA_BLIT_ASYNC Failed  err !!!!!!     fd_rga = %d ", __FUNCTION__, __LINE__, fd_rga);
+                ALOGE("          src info: yrgb_addr=%x, uv_addr=%x,v_addr=%x,"
+                 "vir_w=%d,vir_h=%d,format=%d,"
+                 "act_x_y_w_h [%d,%d,%d,%d] ",
+                                Rga_Request.src.yrgb_addr, Rga_Request.src.uv_addr ,Rga_Request.src.v_addr,
+                                Rga_Request.src.vir_w ,Rga_Request.src.vir_h ,Rga_Request.src.format ,
+                                Rga_Request.src.x_offset ,
+                                Rga_Request.src.y_offset,
+                                Rga_Request.src.act_w ,
+                                Rga_Request.src.act_h
+
+                );
+
+                ALOGE("          dst info: yrgb_addr=%x, uv_addr=%x,v_addr=%x,"
+                 "vir_w=%d,vir_h=%d,format=%d,"
+                 "clip[%d,%d,%d,%d], "
+                 "act_x_y_w_h [%d,%d,%d,%d] ",
+                                Rga_Request.dst.yrgb_addr, Rga_Request.dst.uv_addr ,Rga_Request.dst.v_addr,
+                                Rga_Request.dst.vir_w ,Rga_Request.dst.vir_h ,Rga_Request.dst.format,
+                                Rga_Request.clip.xmin,
+                                Rga_Request.clip.xmax,
+                                Rga_Request.clip.ymin,
+                                Rga_Request.clip.ymax,
+                                Rga_Request.dst.x_offset ,
+                                Rga_Request.dst.y_offset,
+                                Rga_Request.dst.act_w ,
+                                Rga_Request.dst.act_h
+
+                );
+               goto ERROR;
+            }
+        }
+    }
+ERROR:
+#endif
     if (src_bits)
         src->unlock();
 
@@ -790,6 +950,199 @@ static status_t copyBlt(
 
     return err;
 }
+#else
+/*
+ * RgaCopybltThread add by yzq, because RGA_BLIT_ASYNC would use 3ms,
+ * use thread let the work noblock main thread.
+ */
+class RgaCopybltThread : public Thread {
+	static const int MAX_REQ = 5;
+	struct rga_req  mRga_Request[MAX_REQ];
+	int req_pend;
+	public:
+	RgaCopybltThread():Thread(false) {
+		req_pend = 0;
+		if(fd_rga<0){
+			property_set("sys.gui.version", "1.05");
+			fd_rga = open("/dev/rga",O_RDWR,0);
+			if(fd_rga < 0){
+				ALOGE(" rga open err");
+			}
+		}
+	}
+
+	virtual ~RgaCopybltThread() {
+	}
+
+	bool threadLoop() {
+		while(req_pend){
+			int tmp_pend = req_pend;
+			int i=0;
+			for(i=0;i<MAX_REQ;i++){
+				if(( tmp_pend>>i ) & 0x1){
+					if(ioctl(fd_rga, RGA_BLIT_ASYNC, &mRga_Request[i]) != 0){
+						ALOGE("              rga ioctl  RGA_BLIT_ASYNC  err !!!!!!    fd_rga = %d", fd_rga);
+					}
+					req_pend &= ~(1<<i);
+				}	
+			}
+		}
+		return false;
+	}
+	bool setRgaReq(struct rga_req *req){
+		int i=0;
+		if(fd_rga < 0){
+			ALOGE("can't not setRgaReq,fd_rga = %d",fd_rga);
+			return false;
+		}
+
+		for(i=0;i<MAX_REQ;i++){
+			if(!((req_pend>>i) & 0x1)){
+				req_pend |= (1<<i);
+				memcpy(&mRga_Request[i],req,sizeof(struct rga_req));
+				break;
+			}
+		}
+
+		if(i==MAX_REQ){
+			if(ioctl(fd_rga, RGA_BLIT_ASYNC, req) != 0){
+				ALOGE("              rga ioctl  RGA_BLIT_ASYNC  err !!!!!!    fd_rga = %d", fd_rga);
+			}
+		}
+
+		run();
+		return true;
+	}
+};
+static status_t copyBlt(
+        const sp<GraphicBuffer>& dst,
+        const sp<GraphicBuffer>& src,
+        const Region& reg)
+{
+    // src and dst with, height and format must be identical. no verification
+    // is done here.
+    status_t err;
+    bool ioctl_fail = false;
+    uint8_t const * src_bits = NULL;
+    err = src->lock(GRALLOC_USAGE_SW_READ_OFTEN, reg.bounds(), (void**)&src_bits);
+    ALOGE_IF(err, "error locking src buffer %s", strerror(-err));
+
+    uint8_t* dst_bits = NULL;
+    err = dst->lock(GRALLOC_USAGE_SW_WRITE_OFTEN, reg.bounds(), (void**)&dst_bits);
+    ALOGE_IF(err, "error locking dst buffer %s", strerror(-err));
+
+    int32_t vir_w = 0, vir_h = 0;
+    Region::const_iterator head_(reg.begin());
+    Region::const_iterator tail_(reg.end());
+    if (head_ != tail_ && src_bits && dst_bits) {
+        while (head_ != tail_) {
+            const Rect& r(*head_++);
+            ssize_t h_ = r.height();
+            if (h_ <= 0) continue;
+            int32_t tmp_w = r.right;
+            int32_t tmp_h = r.bottom;
+            vir_w = (vir_w >= tmp_w) ? vir_w : tmp_w;
+            vir_h = (vir_h >= tmp_h) ? vir_h : tmp_h;
+        }
+    }
+	static sp<RgaCopybltThread> rgaCopyblt_t(new RgaCopybltThread());
+    head_ = reg.begin();
+    if (head_ != tail_ && src_bits && dst_bits) {
+        //const size_t bpp = bytesPerPixel(src->format);
+        bool needsync = false;
+        struct rga_req  Rga_Request;
+        while (head_ != tail_) {
+            if(needsync){
+				if(!rgaCopyblt_t->setRgaReq(&Rga_Request))
+					goto ERROR;
+			}
+            const Rect& r(*head_++);
+            ssize_t h = r.height();
+            if (h <= 0) continue;
+
+            memset(&Rga_Request,0x0,sizeof(Rga_Request));
+            //set src info
+            Rga_Request.src.yrgb_addr =  0; //(int)s;
+            Rga_Request.src.uv_addr  = (int)src_bits;
+            Rga_Request.src.v_addr   =  Rga_Request.src.uv_addr;
+            Rga_Request.src.vir_w = src->stride;
+            Rga_Request.src.vir_h = vir_h;
+            Rga_Request.src.format = hwChangeRgaFormat(src->format);               // RK_FORMAT_RGBA_8888
+            Rga_Request.src.act_w = r.width();
+            Rga_Request.src.act_h = r.height();
+            Rga_Request.src.x_offset = r.left;
+            Rga_Request.src.y_offset = r.top;
+
+            //set dst info
+            Rga_Request.dst.yrgb_addr = 0;  //(int)d;
+            Rga_Request.dst.uv_addr  = (int)dst_bits;
+            Rga_Request.dst.v_addr   = Rga_Request.dst.uv_addr;
+            Rga_Request.dst.vir_w = dst->stride;
+            Rga_Request.dst.vir_h = vir_h;
+            Rga_Request.dst.act_w = r.width();
+            Rga_Request.dst.act_h = r.height();
+            Rga_Request.clip.xmin = 0;
+            Rga_Request.clip.xmax = Rga_Request.dst.vir_w - 1;
+            Rga_Request.clip.ymin = 0;
+            Rga_Request.clip.ymax = Rga_Request.dst.vir_h - 1;
+            Rga_Request.dst.x_offset = r.left;
+            Rga_Request.dst.y_offset = r.top;
+            
+            Rga_Request.sina = 0;
+            Rga_Request.cosa = 0x10000;
+            Rga_Request.dst.format =  Rga_Request.src.format;               // RK_FORMAT_RGBA_8888
+
+            Rga_Request.alpha_rop_flag |= (1 << 5);
+
+            Rga_Request.mmu_info.mmu_en    = 1;
+            Rga_Request.mmu_info.mmu_flag  = ((2 & 0x3) << 4) | 1;            
+            Rga_Request.mmu_info.mmu_flag |= ((1<<31) | (1 << 8) | (1<<10));
+
+            needsync = true;
+		}
+		if(needsync){
+			if(!rgaCopyblt_t->setRgaReq(&Rga_Request))
+				goto ERROR;
+		}
+    }
+ERROR:
+    if(ioctl_fail){
+    Region::const_iterator head(reg.begin());
+    Region::const_iterator tail(reg.end());
+    if (head != tail && src_bits && dst_bits) {
+        const size_t bpp = bytesPerPixel(src->format);
+        const size_t dbpr = dst->stride * bpp;
+        const size_t sbpr = src->stride * bpp;
+
+        while (head != tail) {
+            const Rect& r(*head++);
+            ssize_t h = r.height();
+            if (h <= 0) continue;
+            size_t size = r.width() * bpp;
+            uint8_t const * s = src_bits + (r.left + src->stride * r.top) * bpp;
+            uint8_t       * d = dst_bits + (r.left + dst->stride * r.top) * bpp;
+            if (dbpr==sbpr && size==sbpr) {
+                size *= h;
+                h = 1;
+            }
+            do {
+                memcpy(d, s, size);
+                d += dbpr;
+                s += sbpr;
+            } while (--h > 0);
+        }
+    }
+    }
+ 
+    if (src_bits)
+        src->unlock();
+
+    if (dst_bits)
+        dst->unlock();
+
+    return err;
+}
+#endif		//endifdef USE_RGA_COPYBLT  just use in rk32xx   
 
 // ----------------------------------------------------------------------------
 
@@ -820,6 +1173,31 @@ status_t Surface::lock(
 
         Region newDirtyRegion;
         if (inOutDirtyBounds) {
+#ifdef USE_LCDC_COMPOSER
+            int32_t tmp_l = inOutDirtyBounds->left;
+            int32_t tmp_r = inOutDirtyBounds->right;
+            int32_t tmp_t = inOutDirtyBounds->top;
+            int32_t tmp_b = inOutDirtyBounds->bottom;
+            if(mTransform == 4){
+                inOutDirtyBounds->left = tmp_t;
+                inOutDirtyBounds->right = tmp_b;
+                inOutDirtyBounds->top = backBuffer->height - tmp_r;
+                inOutDirtyBounds->bottom = backBuffer->height - tmp_l;
+            }
+            if(mTransform == 3){
+                inOutDirtyBounds->left = backBuffer->width - tmp_r;
+                inOutDirtyBounds->right = backBuffer->width - tmp_l;
+                inOutDirtyBounds->top = backBuffer->height - tmp_b;
+                inOutDirtyBounds->bottom = backBuffer->height - tmp_t;
+            }
+            if(mTransform == 7){
+                inOutDirtyBounds->left = backBuffer->width - tmp_b;
+                inOutDirtyBounds->right = backBuffer->width - tmp_t;;
+                inOutDirtyBounds->top = tmp_l;
+                inOutDirtyBounds->bottom = tmp_r;
+            }
+#endif
+
             newDirtyRegion.set(static_cast<Rect const&>(*inOutDirtyBounds));
             newDirtyRegion.andSelf(bounds);
         } else {
@@ -827,6 +1205,7 @@ status_t Surface::lock(
         }
 
         // figure out if we can copy the frontbuffer back
+        int backBufferSlot(getSlotFromBufferLocked(backBuffer.get()));
         const sp<GraphicBuffer>& frontBuffer(mPostedBuffer);
         const bool canCopyBack = (frontBuffer != 0 &&
                 backBuffer->width  == frontBuffer->width &&
@@ -834,15 +1213,19 @@ status_t Surface::lock(
                 backBuffer->format == frontBuffer->format);
 
         if (canCopyBack) {
-            // copy the area that is invalid and not repainted this round
-            const Region copyback(mDirtyRegion.subtract(newDirtyRegion));
+            Mutex::Autolock lock(mMutex);
+            Region oldDirtyRegion;
+            for(int i = 0 ; i < NUM_BUFFER_SLOTS; i++ ) {
+                if(i != backBufferSlot && !mSlots[i].dirtyRegion.isEmpty())
+                    oldDirtyRegion.orSelf(mSlots[i].dirtyRegion);
+            }
+            const Region copyback(oldDirtyRegion.subtract(newDirtyRegion));
             if (!copyback.isEmpty())
                 copyBlt(backBuffer, frontBuffer, copyback);
         } else {
             // if we can't copy-back anything, modify the user's dirty
             // region to make sure they redraw the whole buffer
             newDirtyRegion.set(bounds);
-            mDirtyRegion.clear();
             Mutex::Autolock lock(mMutex);
             for (size_t i=0 ; i<NUM_BUFFER_SLOTS ; i++) {
                 mSlots[i].dirtyRegion.clear();
@@ -852,15 +1235,11 @@ status_t Surface::lock(
 
         { // scope for the lock
             Mutex::Autolock lock(mMutex);
-            int backBufferSlot(getSlotFromBufferLocked(backBuffer.get()));
             if (backBufferSlot >= 0) {
-                Region& dirtyRegion(mSlots[backBufferSlot].dirtyRegion);
-                mDirtyRegion.subtract(dirtyRegion);
-                dirtyRegion = newDirtyRegion;
+               mSlots[backBufferSlot].dirtyRegion = newDirtyRegion;
             }
         }
 
-        mDirtyRegion.orSelf(newDirtyRegion);
         if (inOutDirtyBounds) {
             *inOutDirtyBounds = newDirtyRegion.getBounds();
         }
@@ -904,6 +1283,13 @@ status_t Surface::unlockAndPost()
 
     mPostedBuffer = mLockedBuffer;
     mLockedBuffer = 0;
+#if (defined USE_LCDC_COMPOSER) || (defined USE_RGA_COPYBLT)
+    if(fd_rga != -1){
+        if(ioctl(fd_rga, RGA_FLUSH, NULL) != 0) {
+            ALOGE("unlockAndPost RGA_FLUSH err,   fd_rga: %d,  err: %d ", fd_rga, err);
+        }
+    }
+#endif
     return err;
 }
 
