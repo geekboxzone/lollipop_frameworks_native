@@ -82,6 +82,8 @@ public:
     // the same.
     int32_t sequence;
 
+    int32_t displayStereo;
+
     enum { // flags for doTransaction()
         eDontUpdateGeometryState = 0x00000001,
         eVisibleRegion = 0x00000002,
@@ -203,6 +205,8 @@ public:
     void setPerFrameData(const sp<const DisplayDevice>& hw,
             HWComposer::HWCLayerInterface& layer);
     void setAcquireFence(const sp<const DisplayDevice>& hw,
+            HWComposer::HWCLayerInterface& layer);
+    void setDisplayStereo(const sp<const DisplayDevice>& hw,
             HWComposer::HWCLayerInterface& layer);
 
     Rect getPosition(const sp<const DisplayDevice>& hw);

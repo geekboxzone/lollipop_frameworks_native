@@ -76,6 +76,8 @@ public:
     // when a new frame becomes available.
     void setFrameAvailableListener(const wp<FrameAvailableListener>& listener);
 
+    int32_t getAlreadyStereo();
+
 private:
     ConsumerBase(const ConsumerBase&);
     void operator=(const ConsumerBase&);
@@ -233,6 +235,8 @@ protected:
     //
     // This mutex is intended to be locked by derived classes.
     mutable Mutex mMutex;
+
+    int32_t mAlreadyStereo;
 };
 
 // ----------------------------------------------------------------------------
