@@ -1127,6 +1127,11 @@ void CursorButtonAccumulator::reset(InputDevice* device) {
     mBtnExtra = device->isKeyPressed(BTN_EXTRA);
     mBtnTask = device->isKeyPressed(BTN_TASK);
     mBtnOk = device->isKeyPressed(KEYCODE_ENTER);
+    /*$_rbox_$_modify_$_zhangwen_20140219: init the key ok*/
+ //$_rbox_$_modify_$_begin
+    //     mBtnOk1 = device->isKeyPressed(28);
+         mBtnOk2 = device->isKeyPressed(232);
+ //$_rbox_$_modify_$_begin
 }
 
 void CursorButtonAccumulator::clearButtons() {
@@ -1139,6 +1144,11 @@ void CursorButtonAccumulator::clearButtons() {
     mBtnExtra = 0;
     mBtnTask = 0;
     mBtnOk = 0;
+   /*$_rbox_$_modify_$_zhangwen_20140219: init the key ok*/
+ //$_rbox_$_modify_$_begin
+    //mBtnOk1 = 0;
+    mBtnOk2 = 0;
+ //$_rbox_$_modify_$_begin
 }
 
 void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
@@ -1171,15 +1181,28 @@ void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
 	case KEYCODE_ENTER:
 	    mBtnOk = rawEvent->value;
 	    break;
+ /*$_rbox_$_modify_$_zhangwen_20140219:  define the key ok for infrare mouse*/
+            //$_rbox_$_modify_$_begin
+        case 232:
+             mBtnOk2 = rawEvent->value;   
+          break;
+                 //$_rbox_$_modify_$_end
         }
     }
 }
 
 uint32_t CursorButtonAccumulator::getButtonState() const {
     uint32_t result = 0;
-    if (mBtnOk) {
+
+ /*$_rbox_$_modify_$_zhangwen_20140219:  define the key ok for infrare mouse*/
+         //$_rbox_$_modify_$_begin
+         if (mBtnOk||mBtnOk2) {
+                 result |= AMOTION_EVENT_BUTTON_PRIMARY;
+         }
+         //$_rbox_$_modify_$_end
+/*    if (mBtnOk) {
        result |= AMOTION_EVENT_BUTTON_PRIMARY;
-    }
+    } */
     if (mBtnLeft) {
         result |= AMOTION_EVENT_BUTTON_PRIMARY;
     }
@@ -2215,12 +2238,21 @@ void KeyboardInputMapper::processKey(nsecs_t when, bool down, int32_t keyCode,
         getContext()->fadePointer();
     }
     //
-    if (strcmp(mKeyMouseState, "on") == 0) {
+  /*  if (strcmp(mKeyMouseState, "on") == 0) {
 	if(keyCode == 21 || keyCode == 22 || keyCode == 19 || keyCode == 20) {
 		keyCode = 1000;
 	}
     }
-
+     }*/
+ /*$_rbox_$_modify_$_zhangwen_20140219:In Infrare mouse mode,change the keyCode of left,right,up,down*/
+ //$_rbox_$_modify_$_begin
+         if(strcmp(mKeyMouseState,"on")==0){
+                 if(keyCode==21)       keyCode=260;
+                 else if(keyCode==22)  keyCode=261;
+                 else if(keyCode==19)  keyCode=262;
+                 else if(keyCode==20)  keyCode=263;
+                 }
+ //$_rbox_$_modify_$_end
     NotifyKeyArgs args(when, getDeviceId(), mSource, policyFlags,
             down ? AKEY_EVENT_ACTION_DOWN : AKEY_EVENT_ACTION_UP,
             AKEY_EVENT_FLAG_FROM_SYSTEM, keyCode, scanCode, newMetaState, downTime);
@@ -2710,7 +2742,7 @@ void KeyMouseInputMapper::sync(nsecs_t when) {
     //paint the pointer of mouse here
     int32_t displayId;
     if (mPointerController != NULL) {
-	//LOGD("get---mPointerController--sucess!");
+	//ALOGD("get---mPointerController--sucess!");
 
         mPointerController->setPresentation(
                     PointerControllerInterface::PRESENTATION_POINTER);
@@ -2746,6 +2778,7 @@ void KeyMouseInputMapper::sync(nsecs_t when) {
             motionEventAction = AMOTION_EVENT_ACTION_MOVE;
         }
 
+	//ALOGD("get---mPointerController--------------------------sucess!");
         NotifyMotionArgs args(when, getDeviceId(), mSource, 0,
                 motionEventAction, 0, metaState, AMOTION_EVENT_EDGE_FLAG_NONE, 0,
                 displayId, 1, &pointerProperties, &pointerCoords, 1, 1, downTime);

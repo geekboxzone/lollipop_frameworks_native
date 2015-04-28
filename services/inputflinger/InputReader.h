@@ -662,6 +662,12 @@ private:
     bool mBtnTask;
     bool mBtnOk;
 
+  /*$_rbox_$_modify_$_zhangwen_20140219:  define the key ok for infrare mouse*/   
+  //$_rbox_$_modify_$_begin
+          bool mBtnOk1;
+          bool mBtnOk2;
+ 
+ //$_rbox_$_modify_$_end
     void clearButtons();
 };
 
