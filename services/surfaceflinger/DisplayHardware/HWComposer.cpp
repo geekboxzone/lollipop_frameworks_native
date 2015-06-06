@@ -322,20 +322,8 @@ void HWComposer::hotplug(int disp, int connected) {
                 disp, connected);
         return;
     }
-    size_t count = mDisplayData[disp].configs.size();
-    if(0 == count)
-        ALOGI("mDisplayData one configs size = %d",count);
     queryDisplayProperties(disp);
     mEventHandler.onHotplugReceived(disp, bool(connected));
-    if(1 == disp && 0 == connected){
-        int n = 0;
-        while(count == mDisplayData[disp].configs.size() && count != 0 ){
-            n ++;
-            usleep(5000);
-            if(n % 200 == 0)
-                ALOGE("May be the android system is crash,spent t=%d ms",5*n);
-        }
-    }
 }
 
 static float getDefaultDensity(uint32_t width, uint32_t height) {
