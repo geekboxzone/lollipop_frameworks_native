@@ -2008,7 +2008,7 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         const bool haveBlit = hwc.hasBlitComposition(id);
         const bool haveLcdc = hwc.hasLcdComposition(id);
 
-        if(id == 1 && cur != end)
+        if(id <= 1 && cur != end)
             ismixVH = cur->getCompositionType() == HWC_MIX_V2;
         if(bootcnt < 4)
         {
