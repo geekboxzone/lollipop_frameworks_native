@@ -408,6 +408,17 @@ status_t HWComposer::queryDisplayProperties(int disp) {
             config.ydpi = dpi;
         }
 
+        int count = 0;
+        while(1 == disp && mDisplayData[disp].configs.size()){
+            usleep(5000);
+            count ++;
+            if(200==count){
+                /*Of course,this cannot be happened:10s*/
+                ALOGW("hotplug remove device,wait timeout");
+                break;
+            }
+        }
+
         mDisplayData[disp].configs.push_back(config);
     }
 
