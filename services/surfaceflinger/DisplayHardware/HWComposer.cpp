@@ -322,7 +322,10 @@ void HWComposer::hotplug(int disp, int connected) {
                 disp, connected);
         return;
     }
-    queryDisplayProperties(disp);
+    status_t err = queryDisplayProperties(disp);
+    if(err == NO_INIT && 1 == disp){
+        return;
+    }
     mEventHandler.onHotplugReceived(disp, bool(connected));
 }
 
@@ -416,12 +419,12 @@ status_t HWComposer::queryDisplayProperties(int disp) {
                 if(200==count){
                     /*Of course,this cannot be happened:1s*/
                     ALOGW("hotplug remove device,wait timeout");
-                    property_set("callbak.hwc.htg","false");
+                    property_set("sys.hwc.htg","false");
                     return NO_INIT;
                 }
             }
             if(1 == disp){
-                property_set("callbak.hwc.htg","true");
+                property_set("sys.hwc.htg","true");
             }
         }
 
