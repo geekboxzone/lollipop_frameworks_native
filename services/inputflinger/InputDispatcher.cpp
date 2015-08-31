@@ -60,6 +60,14 @@
 #define INDENT2 "    "
 #define INDENT3 "      "
 #define INDENT4 "        "
+#define DEBUG_ZJY 0
+#if DEBUG_ZJY
+#undef XLOG
+#define XLOG(...) android_printLog(ANDROID_LOG_DEBUG, "InputDispatcher.cpp", __VA_ARGS__)
+#else
+#undef XLOG
+#define XLOG(...)
+#endif
 
 namespace android {
 
@@ -201,6 +209,7 @@ InputDispatcher::InputDispatcher(const sp<InputDispatcherPolicyInterface>& polic
     mPendingEvent(NULL), mAppSwitchSawKeyDown(false), mAppSwitchDueTime(LONG_LONG_MAX),
     mNextUnblockedEvent(NULL),
     mDispatchEnabled(false), mDispatchFrozen(false), mInputFilterEnabled(false),
+    dontNeedFocusHome(true),
     mInputTargetWaitCause(INPUT_TARGET_WAIT_CAUSE_NONE) {
     mLooper = new Looper(false);
 
@@ -822,7 +831,30 @@ bool InputDispatcher::dispatchMotionLocked(
 
         logOutboundMotionDetailsLocked("dispatchMotion - ", entry);
     }
+	XLOG("dispatchMotionLocked result=%d,policyFlags=%d,multiWindowConfig=%d ",entry->interceptMotionResult,
+			entry->policyFlags,multiWindowConfig);
+	// Give the policy a chance to intercept the motion event - multi_window
+	if(multiWindowConfig){
+	   if (entry->interceptMotionResult== MotionEntry::INTERCEPT_MOTION_RESULT_UNKNOWN) {
+		   if (entry->policyFlags & POLICY_FLAG_PASS_TO_USER) {
+			   CommandEntry* commandEntry = postCommandLocked(
+					   & InputDispatcher::doInterceptMotionBeforeDispatchingLockedInterruptible);
+			   if (mFocusedWindowHandle != NULL) {
+				   commandEntry->inputWindowHandle = mFocusedWindowHandle;
+			   }
+			   commandEntry->motionEntry= entry;
+			   entry->refCount += 1;
+			   return false; // wait for the command to run
+		   } else {
+			   entry->interceptMotionResult= MotionEntry::INTERCEPT_MOTION_RESULT_CONTINUE;
+		   }
+	   } else if (entry->interceptMotionResult== MotionEntry::INTERCEPT_MOTION_RESULT_SKIP) {
+		   if (*dropReason == DROP_REASON_NOT_DROPPED) {
+			   *dropReason = DROP_REASON_POLICY;
+		   }
+	   }
 
+		}
     // Clean up if dropping the event.
     if (*dropReason != DROP_REASON_NOT_DROPPED) {
         setInjectionResultLocked(entry, *dropReason == DROP_REASON_POLICY
@@ -1201,8 +1233,11 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
                     isTouchModal = (flags & (InputWindowInfo::FLAG_NOT_FOCUSABLE
                             | InputWindowInfo::FLAG_NOT_TOUCH_MODAL)) == 0;
                     if (isTouchModal || windowInfo->touchableRegionContainsPoint(x, y)) {
-                        newTouchedWindowHandle = windowHandle;
-                        break; // found touched window, exit window loop
+                                if(dontNeedFocusHome || (windowInfo->isHomeWindow && windowInfo->visible)){
+									newTouchedWindowHandle = windowHandle;
+									break; // found touched window, exit window loop
+								}
+                        
                     }
                 }
 
@@ -2802,7 +2837,17 @@ bool InputDispatcher::hasWindowHandleLocked(
     }
     return false;
 }
+void InputDispatcher::setDontFocusedHome(bool tmpDontNeedFocusHome) {
+#if 1
+    XLOG("setDontFocusedHome");
+#endif
+    dontNeedFocusHome = tmpDontNeedFocusHome;
+}
 
+void InputDispatcher::setMultiWindowConfig(bool enable){
+	multiWindowConfig = enable;
+	XLOG("setMultiWindowConfig enable="+enable?"true":"false");
+}
 void InputDispatcher::setInputWindows(const Vector<sp<InputWindowHandle> >& inputWindowHandles) {
 #if DEBUG_FOCUS
     ALOGD("setInputWindows");
@@ -3145,12 +3190,12 @@ void InputDispatcher::dumpDispatchStateLocked(String8& dump) {
             const sp<InputWindowHandle>& windowHandle = mWindowHandles.itemAt(i);
             const InputWindowInfo* windowInfo = windowHandle->getInfo();
 
-            dump.appendFormat(INDENT2 "%zu: name='%s', displayId=%d, "
+            dump.appendFormat(INDENT2 "%d: name='%s', isHomeWindow=%s displayId=%d, "
                     "paused=%s, hasFocus=%s, hasWallpaper=%s, "
                     "visible=%s, canReceiveKeys=%s, flags=0x%08x, type=0x%08x, layer=%d, "
                     "frame=[%d,%d][%d,%d], scale=%f, "
                     "touchableRegion=",
-                    i, windowInfo->name.string(), windowInfo->displayId,
+                    i, windowInfo->name.string(), windowInfo->isHomeWindow?"true":"false",windowInfo->displayId,
                     toString(windowInfo->paused),
                     toString(windowInfo->hasFocus),
                     toString(windowInfo->hasWallpaper),
@@ -3507,6 +3552,33 @@ void InputDispatcher::doInterceptKeyBeforeDispatchingLockedInterruptible(
     entry->release();
 }
 
+void InputDispatcher::doInterceptMotionBeforeDispatchingLockedInterruptible(
+        CommandEntry* commandEntry){
+        XLOG("doInterceptMotionBeforeDispatchingLockedInterruptible");
+	  MotionEntry* entry = commandEntry->motionEntry;
+	
+	  MotionEvent event;
+	  initializeMotionEvent(&event, entry);
+	
+	  mLock.unlock();
+	
+	  nsecs_t delay = mPolicy->interceptMotionBeforeDispatching(commandEntry->inputWindowHandle,
+			  &event, entry->policyFlags);
+	
+	  mLock.lock();
+	
+	  if (delay < 0) {
+		  entry->interceptMotionResult= MotionEntry::INTERCEPT_MOTION_RESULT_SKIP;
+	  } else if (!delay) {
+		  entry->interceptMotionResult = MotionEntry::INTERCEPT_MOTION_RESULT_CONTINUE;
+	  } else {
+		  entry->interceptMotionResult = MotionEntry::INTERCEPT_MOTION_RESULT_TRY_AGAIN_LATER;
+		  entry->interceptMotionWakeupTime = now() + delay;
+	  }
+	  entry->release();
+
+}
+
 void InputDispatcher::doDispatchCycleFinishedLockedInterruptible(
         CommandEntry* commandEntry) {
     sp<Connection> connection = commandEntry->connection;
@@ -3749,7 +3821,12 @@ void InputDispatcher::initializeKeyEvent(KeyEvent* event, const KeyEntry* entry)
             entry->keyCode, entry->scanCode, entry->metaState, entry->repeatCount,
             entry->downTime, entry->eventTime);
 }
-
+void InputDispatcher::initializeMotionEvent(MotionEvent* event, const MotionEntry* entry){
+	event->initialize(entry->deviceId, entry->source, entry->action, entry->flags,
+            entry->edgeFlags, entry->metaState,entry->buttonState,0.0f, 0.0f,  //here got a pre-define-multi_window
+            entry->xPrecision, entry->yPrecision, entry->downTime, entry->eventTime, 
+            entry->pointerCount, entry->pointerProperties, entry->pointerCoords);
+}
 void InputDispatcher::updateDispatchStatisticsLocked(nsecs_t currentTime, const EventEntry* entry,
         int32_t injectionResult, nsecs_t timeSpentWaitingForApplication) {
     // TODO Write some statistics about how long we spend waiting.
@@ -3940,7 +4017,7 @@ InputDispatcher::MotionEntry::MotionEntry(nsecs_t eventTime,
         deviceId(deviceId), source(source), action(action), flags(flags),
         metaState(metaState), buttonState(buttonState), edgeFlags(edgeFlags),
         xPrecision(xPrecision), yPrecision(yPrecision),
-        downTime(downTime), displayId(displayId), pointerCount(pointerCount) {
+        downTime(downTime), displayId(displayId), pointerCount(pointerCount),interceptMotionResult(INTERCEPT_MOTION_RESULT_UNKNOWN) {
     for (uint32_t i = 0; i < pointerCount; i++) {
         this->pointerProperties[i].copyFrom(pointerProperties[i]);
         this->pointerCoords[i].copyFrom(pointerCoords[i]);

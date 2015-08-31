@@ -208,7 +208,7 @@ struct PointerCoords {
 
     void scale(float scale);
     void applyOffset(float xOffset, float yOffset);
-
+	void transfromCoordinate(float posX, float posY, float scaleX, float scaleY);
     inline float getX() const {
         return getAxisValue(AMOTION_EVENT_AXIS_X);
     }
@@ -543,7 +543,7 @@ public:
     void offsetLocation(float xOffset, float yOffset);
 
     void scale(float scaleFactor);
-
+	void transformCoordinate(float posX, float posY, float scaleX, float scaleY);
     // Apply 3x3 perspective matrix transformation.
     // Matrix is in row-major form and compatible with SkMatrix.
     void transform(const float matrix[9]);

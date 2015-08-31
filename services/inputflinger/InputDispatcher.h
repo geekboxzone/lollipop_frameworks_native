@@ -240,6 +240,10 @@ public:
     virtual nsecs_t interceptKeyBeforeDispatching(const sp<InputWindowHandle>& inputWindowHandle,
             const KeyEvent* keyEvent, uint32_t policyFlags) = 0;
 
+	/*Allows the policy a chance to intercept touch motion before dispatching. used by multi-window*/
+	virtual nsecs_t interceptMotionBeforeDispatching(const sp<InputWindowHandle>& InputWindowHandle,
+			const MotionEvent* motionEvent, uint32_t policyFlags) = 0;
+	
     /* Allows the policy a chance to perform default processing for an unhandled key.
      * Returns an alternate keycode to redispatch as a fallback, or 0 to give up. */
     virtual bool dispatchUnhandledKey(const sp<InputWindowHandle>& inputWindowHandle,
@@ -304,6 +308,9 @@ public:
      */
     virtual void setInputWindows(const Vector<sp<InputWindowHandle> >& inputWindowHandles) = 0;
 
+	virtual void setDontFocusedHome(bool dontNeedFocusHome) = 0;
+
+	virtual void setMultiWindowConfig(bool enable) = 0;
     /* Sets the focused application.
      *
      * This method may be called on any thread (usually by the input manager).
@@ -383,6 +390,8 @@ public:
             uint32_t policyFlags);
 
     virtual void setInputWindows(const Vector<sp<InputWindowHandle> >& inputWindowHandles);
+	virtual void setDontFocusedHome(bool dontNeedFocusHome);
+	virtual void setMultiWindowConfig(bool enable);
     virtual void setFocusedApplication(const sp<InputApplicationHandle>& inputApplicationHandle);
     virtual void setInputDispatchMode(bool enabled, bool frozen);
     virtual void setInputFilterEnabled(bool enabled);
@@ -515,7 +524,15 @@ private:
         uint32_t pointerCount;
         PointerProperties pointerProperties[MAX_POINTERS];
         PointerCoords pointerCoords[MAX_POINTERS];
-
+		
+	    enum InterceptMotionResult {
+            INTERCEPT_MOTION_RESULT_UNKNOWN,
+            INTERCEPT_MOTION_RESULT_SKIP,
+            INTERCEPT_MOTION_RESULT_CONTINUE,
+            INTERCEPT_MOTION_RESULT_TRY_AGAIN_LATER,
+        };
+        InterceptMotionResult interceptMotionResult;//set based on the interception result
+		nsecs_t interceptMotionWakeupTime;// used with INTERCEPT_MOTION_RESULT_TRY_AGAIN_LATER
         MotionEntry(nsecs_t eventTime,
                 int32_t deviceId, uint32_t source, uint32_t policyFlags,
                 int32_t action, int32_t flags,
@@ -593,6 +610,7 @@ private:
         sp<Connection> connection;
         nsecs_t eventTime;
         KeyEntry* keyEntry;
+		MotionEntry* motionEntry;
         sp<InputApplicationHandle> inputApplicationHandle;
         sp<InputWindowHandle> inputWindowHandle;
         String8 reason;
@@ -996,7 +1014,10 @@ private:
 
     void logOutboundKeyDetailsLocked(const char* prefix, const KeyEntry* entry);
     void logOutboundMotionDetailsLocked(const char* prefix, const MotionEntry* entry);
-
+	
+	bool dontNeedFocusHome;
+	bool multiWindowConfig;
+	
     // Keeping track of ANR timeouts.
     enum InputTargetWaitCause {
         INPUT_TARGET_WAIT_CAUSE_NONE,
@@ -1104,6 +1125,7 @@ private:
     void doNotifyInputChannelBrokenLockedInterruptible(CommandEntry* commandEntry);
     void doNotifyANRLockedInterruptible(CommandEntry* commandEntry);
     void doInterceptKeyBeforeDispatchingLockedInterruptible(CommandEntry* commandEntry);
+	void doInterceptMotionBeforeDispatchingLockedInterruptible(CommandEntry* commandEntry);
     void doDispatchCycleFinishedLockedInterruptible(CommandEntry* commandEntry);
     bool afterKeyEventLockedInterruptible(const sp<Connection>& connection,
             DispatchEntry* dispatchEntry, KeyEntry* keyEntry, bool handled);
@@ -1111,7 +1133,7 @@ private:
             DispatchEntry* dispatchEntry, MotionEntry* motionEntry, bool handled);
     void doPokeUserActivityLockedInterruptible(CommandEntry* commandEntry);
     void initializeKeyEvent(KeyEvent* event, const KeyEntry* entry);
-
+	void initializeMotionEvent(MotionEvent* event, const MotionEntry* entry);
     // Statistics gathering.
     void updateDispatchStatisticsLocked(nsecs_t currentTime, const EventEntry* entry,
             int32_t injectionResult, nsecs_t timeSpentWaitingForApplication);

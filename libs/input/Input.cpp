@@ -22,9 +22,27 @@
 
 #include <input/Input.h>
 #include <input/InputEventLabels.h>
+#include <cutils/log.h>
 
 #ifdef HAVE_ANDROID_OS
 #include <binder/Parcel.h>
+#endif
+
+#define DEBUG_ZJY 0
+#if DEBUG_ZJY
+#undef XLOG
+#define XLOG(...) android_printLog(ANDROID_LOG_DEBUG, "Input.cpp", __VA_ARGS__)
+#else
+#undef XLOG
+#define XLOG(...)
+#endif
+#define DEBUG_ZJY_DEBUG 0
+#if DEBUG_ZJY_DEBUG
+#undef XLOGD
+#define XLOGD(...) android_printLog(ANDROID_LOG_DEBUG, "Input.cpp", __VA_ARGS__)
+#else
+#undef XLOGD
+#define XLOGD(...)
 #endif
 
 namespace android {
@@ -128,6 +146,12 @@ static inline void scaleAxisValue(PointerCoords& c, int axis, float scaleFactor)
     }
 }
 
+static inline void transformAxisValue(PointerCoords& c, int axis,float offset, float scale){
+	float value = c.getAxisValue(axis);
+	if(value != 0){
+		c.setAxisValue(axis, (value - offset)/scale);
+	}
+}
 void PointerCoords::scale(float scaleFactor) {
     // No need to scale pressure or size since they are normalized.
     // No need to scale orientation since it is meaningless to do so.
@@ -138,7 +162,11 @@ void PointerCoords::scale(float scaleFactor) {
     scaleAxisValue(*this, AMOTION_EVENT_AXIS_TOOL_MAJOR, scaleFactor);
     scaleAxisValue(*this, AMOTION_EVENT_AXIS_TOOL_MINOR, scaleFactor);
 }
-
+void PointerCoords::transfromCoordinate(float posX,float posY,float scaleX,float scaleY){
+	XLOGD("posXY=(%f,%f), scaleXY=(%f,%f)",posX, posY, scaleX, scaleY);
+	transformAxisValue(*this, AMOTION_EVENT_AXIS_X, posX, scaleX);
+	transformAxisValue(*this, AMOTION_EVENT_AXIS_Y, posY, scaleY);
+}
 void PointerCoords::applyOffset(float xOffset, float yOffset) {
     setAxisValue(AMOTION_EVENT_AXIS_X, getX() + xOffset);
     setAxisValue(AMOTION_EVENT_AXIS_Y, getY() + yOffset);
@@ -229,6 +257,7 @@ void MotionEvent::initialize(
         size_t pointerCount,
         const PointerProperties* pointerProperties,
         const PointerCoords* pointerCoords) {
+        XLOG("initialize");
     InputEvent::initialize(deviceId, source);
     mAction = action;
     mFlags = flags;
@@ -240,11 +269,15 @@ void MotionEvent::initialize(
     mXPrecision = xPrecision;
     mYPrecision = yPrecision;
     mDownTime = downTime;
+	XLOG("mPointerProperties appent before pointerProperties=%p,pointerCount=%d",pointerProperties,
+		pointerCount);
     mPointerProperties.clear();
     mPointerProperties.appendArray(pointerProperties, pointerCount);
+	XLOG("mPointerProperties appent after");
     mSampleEventTimes.clear();
     mSamplePointerCoords.clear();
     addSample(eventTime, pointerCoords);
+	XLOG("initialize end ");
 }
 
 void MotionEvent::copyFrom(const MotionEvent* other, bool keepHistory) {
@@ -278,8 +311,10 @@ void MotionEvent::copyFrom(const MotionEvent* other, bool keepHistory) {
 void MotionEvent::addSample(
         int64_t eventTime,
         const PointerCoords* pointerCoords) {
+        XLOG("addSample before");
     mSampleEventTimes.push(eventTime);
     mSamplePointerCoords.appendArray(pointerCoords, getPointerCount());
+	XLOG("addsample after");
 }
 
 const PointerCoords* MotionEvent::getRawPointerCoords(size_t pointerIndex) const {
@@ -347,6 +382,13 @@ void MotionEvent::scale(float scaleFactor) {
     size_t numSamples = mSamplePointerCoords.size();
     for (size_t i = 0; i < numSamples; i++) {
         mSamplePointerCoords.editItemAt(i).scale(scaleFactor);
+    }
+}
+
+void MotionEvent::transformCoordinate(float posX,float posY,float scaleX,float scaleY){
+		size_t numSamples = mSamplePointerCoords.size();
+    for (size_t i = 0; i < numSamples; i++) {
+        mSamplePointerCoords.editItemAt(i).transfromCoordinate(posX, posY, scaleX, scaleY);
     }
 }
 
@@ -419,6 +461,7 @@ void MotionEvent::transform(const float matrix[9]) {
 
 #ifdef HAVE_ANDROID_OS
 status_t MotionEvent::readFromParcel(Parcel* parcel) {
+	XLOG("readFromParcel");
     size_t pointerCount = parcel->readInt32();
     size_t sampleCount = parcel->readInt32();
     if (pointerCount == 0 || pointerCount > MAX_POINTERS || sampleCount == 0) {
@@ -466,6 +509,7 @@ status_t MotionEvent::readFromParcel(Parcel* parcel) {
 }
 
 status_t MotionEvent::writeToParcel(Parcel* parcel) const {
+	XLOG("writeToParcel");
     size_t pointerCount = mPointerProperties.size();
     size_t sampleCount = mSampleEventTimes.size();
 

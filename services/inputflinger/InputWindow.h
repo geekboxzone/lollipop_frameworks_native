@@ -127,6 +127,7 @@ struct InputWindowInfo {
     bool hasFocus;
     bool hasWallpaper;
     bool paused;
+	bool isHomeWindow;
     int32_t layer;
     int32_t ownerPid;
     int32_t ownerUid;
