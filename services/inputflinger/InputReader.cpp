@@ -1207,7 +1207,13 @@ uint32_t CursorButtonAccumulator::getButtonState() const {
         result |= AMOTION_EVENT_BUTTON_PRIMARY;
     }
     if (mBtnRight) {
-        result |= AMOTION_EVENT_BUTTON_BACK;;
+       //$_rochchips_$_modify_by_huangjc make sure mouse BtnRight for product
+        char *mIsBox = new char[PROPERTY_VALUE_MAX];
+        property_get("ro.target.product", mIsBox, "tablet");
+        if(strcmp(mIsBox, "tablet")==0)
+         result |= AMOTION_EVENT_BUTTON_SECONDARY;
+        else
+         result |= AMOTION_EVENT_BUTTON_BACK;
     }
     if (mBtnMiddle) {
         result |= AMOTION_EVENT_BUTTON_TERTIARY;
