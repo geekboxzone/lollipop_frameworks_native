@@ -84,6 +84,10 @@ private:
 
     /* location of the color uniform */
     GLint mColorLoc;
+#ifdef ENABLE_STEREO_AND_DEFORM
+    /* argument of deform, used in 3dDeform */
+    GLint mDeform;
+#endif
 };
 
 

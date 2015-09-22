@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
@@ -87,6 +88,7 @@ ProgramCache::~ProgramCache() {
 }
 
 void ProgramCache::primeCache() {
+
     uint32_t shaderCount = 0;
     uint32_t keyMask = Key::BLEND_MASK | Key::OPACITY_MASK |
                        Key::PLANE_ALPHA_MASK | Key::TEXTURE_MASK;
@@ -117,6 +119,7 @@ void ProgramCache::primeCache() {
 
 ProgramCache::Key ProgramCache::computeKey(const Description& description) {
     Key needs;
+#ifndef ENABLE_STEREO_AND_DEFORM
     needs.set(Key::TEXTURE_MASK,
             !description.mTextureEnabled ? Key::TEXTURE_OFF :
             description.mTexture.getTextureTarget() == GL_TEXTURE_EXTERNAL_OES ? Key::TEXTURE_EXT :
@@ -130,6 +133,24 @@ ProgramCache::Key ProgramCache::computeKey(const Description& description) {
             description.mOpaque ? Key::OPACITY_OPAQUE : Key::OPACITY_TRANSLUCENT)
     .set(Key::COLOR_MATRIX_MASK,
             description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON :  Key::COLOR_MATRIX_OFF);
+#else
+    needs.set(Key::TEXTURE_MASK,
+            !description.mTextureEnabled ? Key::TEXTURE_OFF :
+            description.mTexture.getTextureTarget() == GL_TEXTURE_EXTERNAL_OES ? Key::TEXTURE_EXT :
+            description.mTexture.getTextureTarget() == GL_TEXTURE_2D           ? Key::TEXTURE_2D :
+            Key::TEXTURE_OFF)
+    .set(Key::PLANE_ALPHA_MASK,
+            (description.mPlaneAlpha < 1) ? Key::PLANE_ALPHA_LT_ONE : Key::PLANE_ALPHA_EQ_ONE)
+    .set(Key::BLEND_MASK,
+            description.mPremultipliedAlpha ? Key::BLEND_PREMULT : Key::BLEND_NORMAL)
+    .set(Key::OPACITY_MASK,
+            description.mOpaque ? Key::OPACITY_OPAQUE : Key::OPACITY_TRANSLUCENT)
+    .set(Key::COLOR_MATRIX_MASK,
+            description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON :  Key::COLOR_MATRIX_OFF)
+    .set(Key::DEFORMATION_MASK,
+            description.mDeformEnabled ? Key::DEFORMATION_ON : Key::DEFORMATION_OFF);
+#endif
+
     return needs;
 }
 
@@ -159,7 +180,9 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
 
     // default precision is required-ish in fragment shaders
     fs << "precision mediump float;";
-
+#ifdef ENABLE_STEREO_AND_DEFORM
+    fs << "uniform float deform;";
+#endif
     if (needs.getTextureTarget() == Key::TEXTURE_EXT) {
         fs << "uniform samplerExternalOES sampler;"
            << "varying vec2 outTexCoords;";
@@ -177,7 +200,27 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
     }
     fs << "void main(void) {" << indent;
     if (needs.isTexturing()) {
+#ifdef ENABLE_STEREO_AND_DEFORM
+        if(needs.hasDeform())
+        {
+            // do deform process
+            fs << "float offset =0.0;";
+            fs << "if(outTexCoords.x < 0.5) offset = 0.25;";
+            fs << "if(outTexCoords.x > 0.5) offset = 0.75;";
+            fs << "vec2 tex = outTexCoords - vec2(offset, 0.5);";
+            fs << "float k1 =1.0;";
+            fs << "float k2 =deform;";
+            fs << "tex = k1*(1.0 + k2*(pow(tex.x, 2.0) + pow(tex.y, 2.0)))*tex + vec2(offset, 0.5);";
+            fs << "if(tex.y>=0.0 && tex.y<=1.0 && tex.x>(offset-0.25) && tex.x<(offset+0.25))";
+            fs << "   gl_FragColor = texture2D(sampler, tex);";
+            fs << "else";
+            fs << "   gl_FragColor = vec4(0.0,0.0,0.0,0.0);";
+        }
+        else
+            fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
+#else
         fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
+#endif
     } else {
         fs << "gl_FragColor = color;";
     }
@@ -192,8 +235,8 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
         } else {
             fs << "gl_FragColor.a *= alphaPlane;";
         }
-    }
-
+    }    
+    
     if (needs.hasColorMatrix()) {
         if (!needs.isOpaque() && needs.isPremultiplied()) {
             // un-premultiply if needed before linearization
@@ -225,8 +268,8 @@ Program* ProgramCache::generateProgram(const Key& needs) {
 }
 
 void ProgramCache::useProgram(const Description& description) {
-
     // generate the key for the shader based on the description
+
     Key needs(computeKey(description));
 
      // look-up the program in the cache
@@ -241,13 +284,10 @@ void ProgramCache::useProgram(const Description& description) {
         //ALOGD(">>> generated new program: needs=%08X, time=%u ms (%d programs)",
         //        needs.mNeeds, uint32_t(ns2ms(time)), mCache.size());
     }
-
     // here we have a suitable program for this description
     if (program->isValid()) {
         program->use();
         program->setUniforms(description);
     }
 }
-
-
 } /* namespace android */

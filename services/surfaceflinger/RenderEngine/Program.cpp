@@ -22,6 +22,7 @@
 #include "ProgramCache.h"
 #include "Description.h"
 #include <utils/String8.h>
+#include <cutils/properties.h>
 
 namespace android {
 
@@ -64,6 +65,9 @@ Program::Program(const ProgramCache::Key& /*needs*/, const char* vertex, const c
         mSamplerLoc = glGetUniformLocation(programId, "sampler");
         mColorLoc = glGetUniformLocation(programId, "color");
         mAlphaPlaneLoc = glGetUniformLocation(programId, "alphaPlane");
+#ifdef ENABLE_STEREO_AND_DEFORM
+        mDeform = glGetUniformLocation(programId,"deform");
+#endif
 
         // set-up the default values for our uniforms
         glUseProgram(programId);
@@ -123,6 +127,15 @@ String8& Program::dumpShader(String8& result, GLenum /*type*/) {
     return result;
 }
 
+#ifdef ENABLE_STEREO_AND_DEFORM
+float getDeformUniform(){
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.sf.deform_argu", value, "0");
+    float deformargu = atof(value);
+    return deformargu;
+}
+#endif
+
 void Program::setUniforms(const Description& desc) {
 
     // TODO: we should have a mechanism here to not always reset uniforms that
@@ -135,6 +148,12 @@ void Program::setUniforms(const Description& desc) {
     if (mAlphaPlaneLoc >= 0) {
         glUniform1f(mAlphaPlaneLoc, desc.mPlaneAlpha);
     }
+#ifdef ENABLE_STEREO_AND_DEFORM
+    if (mDeform >= 0) {
+        glUniform1f(mDeform, getDeformUniform());
+    }
+#endif
+
     if (mColorLoc >= 0) {
         glUniform4fv(mColorLoc, 1, desc.mColor);
     }

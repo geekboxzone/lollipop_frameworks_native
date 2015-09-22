@@ -33,6 +33,9 @@ Description::Description() :
     mOpaque = true;
     mTextureEnabled = false;
     mColorMatrixEnabled = false;
+#ifdef ENABLE_STEREO_AND_DEFORM
+    mDeformEnabled = false;
+#endif
 
     memset(mColor, 0, sizeof(mColor));
 }
@@ -87,6 +90,12 @@ void Description::setColorMatrix(const mat4& mtx) {
     mColorMatrix = mtx;
     mColorMatrixEnabled = (mtx != identity);
 }
+
+#ifdef ENABLE_STEREO_AND_DEFORM
+void Description::setDeform(bool deformstus ) {
+    mDeformEnabled = deformstus;
+}
+#endif
 
 
 } /* namespace android */

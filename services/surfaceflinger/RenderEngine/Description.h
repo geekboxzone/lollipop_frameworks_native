@@ -52,6 +52,9 @@ class Description {
     mat4 mProjectionMatrix;
 
     bool mColorMatrixEnabled;
+#ifdef ENABLE_STEREO_AND_DEFORM
+    bool mDeformEnabled;
+#endif
     mat4 mColorMatrix;
 
 public:
@@ -66,6 +69,9 @@ public:
     void setColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha);
     void setProjectionMatrix(const mat4& mtx);
     void setColorMatrix(const mat4& mtx);
+#ifdef ENABLE_STEREO_AND_DEFORM
+    void setDeform(bool deformstus);
+#endif
 
 private:
     bool mUniformsDirty;

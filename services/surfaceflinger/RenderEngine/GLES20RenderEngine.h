@@ -76,9 +76,13 @@ protected:
     virtual void disableBlending();
 
     virtual void drawMesh(const Mesh& mesh);
-
+#ifndef ENABLE_STEREO_AND_DEFORM
     virtual void beginGroup(const mat4& colorTransform);
-    virtual void endGroup();
+    virtual void endGroup();    
+#else
+    virtual void beginGroup(const mat4& colorTransform,int mode);
+    virtual void endGroup(int mode);
+#endif
 
     virtual size_t getMaxTextureSize() const;
     virtual size_t getMaxViewportDims() const;

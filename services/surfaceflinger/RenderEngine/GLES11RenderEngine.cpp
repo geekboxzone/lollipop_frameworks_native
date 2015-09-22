@@ -268,13 +268,21 @@ void GLES11RenderEngine::drawMesh(const Mesh& mesh) {
     }
 }
 
+#ifndef ENABLE_STEREO_AND_DEFORM
 void GLES11RenderEngine::beginGroup(const mat4& /*colorTransform*/) {
     // doesn't do anything in GLES 1.1
 }
-
 void GLES11RenderEngine::endGroup() {
     // doesn't do anything in GLES 1.1
 }
+#else
+void GLES11RenderEngine::beginGroup(const mat4& ,int mode) {
+    // doesn't do anything in GLES 1.1
+}
+void GLES11RenderEngine::endGroup(int mode) {
+    // doesn't do anything in GLES 1.1
+}
+#endif
 
 void GLES11RenderEngine::dump(String8& result) {
     RenderEngine::dump(result);

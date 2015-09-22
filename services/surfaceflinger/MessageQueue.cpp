@@ -179,13 +179,31 @@ int MessageQueue::cb_eventReceiver(int fd, int events, void* data) {
     return queue->eventReceiver(fd, events);
 }
 
+#ifdef ENABLE_STEREO_AND_DEFORM
+    struct timeval  tpend2_ttr;
+#endif
+
 int MessageQueue::eventReceiver(int /*fd*/, int /*events*/) {
     ssize_t n;
+#ifdef ENABLE_STEREO_AND_DEFORM
+    struct timeval tpend1, tpend2_tt;
+    long usec1 = 0;
+#endif
+    
     DisplayEventReceiver::Event buffer[8];
     while ((n = DisplayEventReceiver::getEvents(mEventTube, buffer, 8)) > 0) {
         for (int i=0 ; i<n ; i++) {
             if (buffer[i].header.type == DisplayEventReceiver::DISPLAY_EVENT_VSYNC) {
 #if INVALIDATE_ON_VSYNC
+#ifdef ENABLE_STEREO_AND_DEFORM
+                gettimeofday(&tpend1,NULL);
+                usec1 = 10000*(tpend1.tv_sec - tpend2_ttr.tv_sec) + (tpend1.tv_usec- tpend2_ttr.tv_usec)/100;
+               // if((int)usec1 < 16 || (int)usec1 > 18 )
+                    ALOGD("debug2 eventReceiver  time=%ld",usec1);
+                tpend2_ttr =tpend1;
+
+                //ALOGD("mesg invalid");
+#endif
                 mHandler->dispatchInvalidate();
 #else
                 mHandler->dispatchRefresh();

@@ -77,9 +77,52 @@
 
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
+#include <string.h>
 
 #define DISPLAY_COUNT       1
 #define RK_SURFLGR_VERSION "1.000"
+
+#ifdef ENABLE_STEREO_AND_DEFORM
+#define APP_INFO_PATH       "/data/data/com.rockchip.vision/app_info"
+struct app_info_t {
+    char name[100];
+};
+
+struct app_info_t app_info[100] = {0};
+
+void setListState(char *name, bool state)
+{
+    if (name != NULL)
+    {
+        FILE *fp = NULL;
+        int i = 0;
+        if(state) {
+            for(i=0; i<100; i++) {
+                if(0==strcmp(app_info[i].name, "")) {
+                    strcpy(app_info[i].name, name);
+                    break;
+                }
+            }
+        } else {
+            for(i=0; i<100; i++) {
+                if(0==strcmp(app_info[i].name, name)) {
+                    memset(app_info[i].name, 0, 100);
+                    break;
+                }
+            }
+        }
+        fp = fopen(APP_INFO_PATH, "rb+");
+        //ALOGD("setListState====fp:(%s)",fp);
+        if(fp>0) {
+            //ALOGD("setListState======fp is ok!");
+            fwrite(app_info, sizeof(app_info), 1, fp);
+            fclose(fp);
+        }else{
+            ALOGD("FPOPEN fail %s",strerror(errno));
+        }
+    }
+}
+#endif
 
 /*
  * DEBUG_SCREENSHOTS: set to true to check that screenshots are not all
@@ -204,6 +247,9 @@ SurfaceFlinger::SurfaceFlinger()
     property_get("ro.sf.lcdc_composer", value, "0");
     mUseLcdcComposer = atoi(value);
     property_set("sys.ggsurflgr.version", RK_SURFLGR_VERSION);
+#ifdef ENABLE_STEREO_AND_DEFORM
+    mDeform = false;
+#endif
 }
 
 void SurfaceFlinger::onFirstRef()
@@ -388,6 +434,11 @@ public:
     }
 
 private:
+#ifdef ENABLE_STEREO_AND_DEFORM
+    struct timeval tpend1, tpend2_tt;
+         long usec1 = 0;
+#endif
+
     virtual void onDispSyncEvent(nsecs_t when) {
         sp<VSyncSource::Callback> callback;
         {
@@ -399,8 +450,19 @@ private:
                 ATRACE_INT(mVsyncEventLabel.string(), mValue);
             }
         }
-
         if (callback != NULL) {
+#ifdef ENABLE_STEREO_AND_DEFORM
+        if(!strcmp(mVsyncEventLabel.string(),"VSYNC-sf"))
+        {
+            gettimeofday(&tpend1,NULL);
+            usec1 = 10000*(tpend1.tv_sec - tpend2_tt.tv_sec) + (tpend1.tv_usec- tpend2_tt.tv_usec)/100;
+           // if((int)usec1 < 16 || (int)usec1 > 18 )
+                ALOGD("debug2 onDispSyncEvent  time=%ld----------------------",usec1);
+            tpend2_tt =tpend1;
+
+        }
+                //ALOGD("event_sent name=%s",mVsyncEventLabel.string());
+#endif
             callback->onVSyncEvent(when);
         }
     }
@@ -1044,6 +1106,10 @@ void SurfaceFlinger::preComposition()
         }
     }
     if (needExtraInvalidate) {
+#ifdef ENABLE_STEREO_AND_DEFORM
+            ALOGD("invilid too3");
+#endif
+
         signalLayerUpdate();
     }
 }
@@ -1912,6 +1978,10 @@ bool SurfaceFlinger::handlePageFlip()
     // queued frame that shouldn't be displayed during this vsync period, wake
     // up during the next vsync period to check again.
     if (frameQueued && layersWithQueuedFrames.empty()) {
+#ifdef ENABLE_STEREO_AND_DEFORM
+            ALOGD("invilid too4");
+#endif
+
         signalLayerUpdate();
     }
 
@@ -1933,6 +2003,9 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     //    keep its virtual display state machine in sync, or
     // 2) There is work to be done (the dirty region isn't empty)
     bool isHwcDisplay = hw->getHwcDisplayId() >= 0;
+#ifdef ENABLE_STEREO_AND_DEFORM
+    int ShadeMode = 0;
+#endif
     if (!isHwcDisplay && inDirtyRegion.isEmpty()) {
         return;
     }
@@ -1961,20 +2034,61 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
             hw->swapRegion = dirtyRegion;
         }
     }
-
+#ifdef ENABLE_STEREO_AND_DEFORM
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.sf.deform", value, "0");
+    int temp = atoi(value);
+    if(temp)
+        mDeform = true;
+    else
+        mDeform = false;
     if (CC_LIKELY(!mDaltonize && !mHasColorMatrix)) {
-        if (!doComposeSurfaces(hw, dirtyRegion)) return;
+        if(mDeform)
+        {
+            ShadeMode = 1;
+        }
+        else if (!doComposeSurfaces(hw, dirtyRegion))
+        {
+            return;
+        }
     } else {
+        if(mDeform)
+        {
+            ShadeMode = 2;
+        }
+        else
+        {
+            ShadeMode = 3;
+        }
+    }
+
+    if(ShadeMode)
+    {
         RenderEngine& engine(getRenderEngine());
         mat4 colorMatrix = mColorMatrix;
         if (mDaltonize) {
             colorMatrix = colorMatrix * mDaltonizer();
         }
-        engine.beginGroup(colorMatrix);
+        engine.beginGroup(colorMatrix,ShadeMode);
+        if (!doComposeSurfaces(hw, dirtyRegion))
+            return;
+        engine.endGroup(ShadeMode);
+    }
+#else
+    if (CC_LIKELY(!mDaltonize && !mHasColorMatrix)) {
+    if (!doComposeSurfaces(hw, dirtyRegion)) return;
+    } else {
+
+        RenderEngine& engine(getRenderEngine());
+        mat4 colorMatrix = mColorMatrix;
+        if (mDaltonize) {
+            colorMatrix = colorMatrix * mDaltonizer();
+        }
+        engine.beginGroup(colorMatrix);        
         doComposeSurfaces(hw, dirtyRegion);
         engine.endGroup();
     }
-
+#endif
     // update the swap region and clear the dirty region
     hw->swapRegion.orSelf(dirtyRegion);
 
@@ -2004,9 +2118,20 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
 
         // Never touch the framebuffer if we don't have any framebuffer layers
         bool  ismixVH = false;
+#ifdef ENABLE_STEREO_AND_DEFORM
+        bool  isStereo = false;
+#endif
         const bool hasHwcComposition = hwc.hasHwcComposition(id);
         const bool haveBlit = hwc.hasBlitComposition(id);
         const bool haveLcdc = hwc.hasLcdComposition(id);
+
+#ifdef ENABLE_STEREO_AND_DEFORM
+        char value[PROPERTY_VALUE_MAX];
+        property_get("sys.3d.height", value, "0");
+        float temp = atof(value);
+        if(temp<1)
+        isStereo = true;
+#endif
 
         if(id <= 1 && cur != end)
             ismixVH = cur->getCompositionType() == HWC_MIX_V2;
@@ -2015,7 +2140,11 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             bootcnt ++;
             // do nothing ,for kernel->android 3 frames black
         }
-        else if (hasHwcComposition || haveBlit || haveLcdc || ismixVH)
+#ifdef ENABLE_STEREO_AND_DEFORM
+        else if (hasHwcComposition || haveBlit || haveLcdc || ismixVH || isStereo)
+#else
+        else if (hasHwcComposition || haveBlit || haveLcdc || ismixVH )
+#endif
         {
             // when using overlays, we assume a fully transparent framebuffer
             // NOTE: we could reduce how much we need to clear, for instance
@@ -3005,6 +3134,13 @@ status_t SurfaceFlinger::onTransact(
             return PERMISSION_DENIED;
         }
         int n;
+#ifdef ENABLE_STEREO_AND_DEFORM
+        int length;//3d game package's name length
+        float deformArgu;
+        float StereoHeight;
+        char name[100]={0};
+        char *a =NULL;
+#endif
         switch (code) {
             case 1000: // SHOW_CPU, NOT SUPPORTED ANYMORE
             case 1001: // SHOW_FPS, NOT SUPPORTED ANYMORE
@@ -3100,6 +3236,40 @@ status_t SurfaceFlinger::onTransact(
                 mPrimaryDispSync.setRefreshSkipCount(n);
                 return NO_ERROR;
             }
+#ifdef ENABLE_STEREO_AND_DEFORM
+            case 2001: {//3d Stereo white list manage
+                n = data.readInt32();
+                n = n ? 1 : 0;
+                length = data.readInt32();//app package's name length
+                const void *pname=data.readInplace(1);
+                void *p = const_cast <void *>(pname);
+                a=(char *)p;
+                a=a+4;
+                for(int i=0;i<length;i++)
+                {
+                name[i]=*a;
+                a+=2;
+                }
+                name[length]='\0';
+                setListState(name, n);//n=1 add list;  n=0  remove list;
+
+                return NO_ERROR;
+            }
+            case 2002: {// adjust argu of deform
+                deformArgu = data.readFloat();// > 0.0
+                char *buffer = new char[30];
+                sprintf(buffer,"%f",deformArgu);
+                property_set("debug.sf.deform_argu",buffer);
+                return NO_ERROR;
+            }
+            case 2003: {//adjust argu of height of stereo
+                StereoHeight = data.readFloat();// 0.0 ~ 1.0
+                char *buffer = new char[30];
+                sprintf(buffer,"%f",StereoHeight);
+                property_set("sys.3d.height",buffer);
+                return NO_ERROR;
+            }
+#endif
         }
     }
     return err;

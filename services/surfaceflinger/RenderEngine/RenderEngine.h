@@ -108,8 +108,13 @@ public:
     // grouping
     // creates a color-transform group, everything drawn in the group will be
     // transformed by the given color transform when endGroup() is called.
+#ifndef ENABLE_STEREO_AND_DEFORM
     virtual void beginGroup(const mat4& colorTransform) = 0;
     virtual void endGroup() = 0;
+#else
+    virtual void beginGroup(const mat4& colorTransform,int mode) = 0;
+    virtual void endGroup(int mode) = 0;
+#endif
 
     // queries
     virtual size_t getMaxTextureSize() const = 0;

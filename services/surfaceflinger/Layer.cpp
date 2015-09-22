@@ -50,6 +50,10 @@
 
 #define DEBUG_RESIZE    0
 
+#ifdef ENABLE_STEREO_AND_DEFORM
+#define APP_INFO_PATH       "/data/data/com.rockchip.vision/app_info"
+#endif
+
 namespace android {
 
 // ---------------------------------------------------------------------------
@@ -580,6 +584,7 @@ void Layer::setPerFrameData(const sp<const DisplayDevice>& hw,
     }
     layer.setLayername(getName().string());
     layer.setAlreadyStereo(mSurfaceFlingerConsumer->getAlreadyStereo());
+    
 }
 
 void Layer::setAcquireFence(const sp<const DisplayDevice>& /* hw */,
@@ -746,24 +751,108 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
     engine.disableTexturing();
 }
 
+
+#ifdef ENABLE_STEREO_AND_DEFORM
 void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
 	Mesh& mMesh, int alreadyStereo, int displayStereo)
-{
+{   
     Mesh::VertexArray<vec2> position(mMesh.getPositionArray<vec2>());
 
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.height", value, "0");
+    float height_scale = atof(value);
+    if(height_scale < 0.0)
+        height_scale = 0.0;
+    if(height_scale > 1.0)
+        height_scale = 1.0;
+
+    //adjust (IPD)Interpupillary Distance: the distance between two eyes
+    property_get("sys.3d.ipd_scale", value, "0");
+    float ipd_scale = atof(value);
+    if(ipd_scale > 1.0)
+        ipd_scale = 1.0;
+    if(ipd_scale < -1.0)
+        ipd_scale = -1.0;
+    property_get("sys.3d.ipd_offset", value, "0");
+    float ipd_offset = atof(value);
+    if(ipd_offset > 1.0)
+        ipd_offset = 1.0;
+    if(ipd_offset < -1.0)
+        ipd_offset = -1.0;
+    
     if(1==displayStereo && !alreadyStereo) {
+        
         position[0].x /= 2;
         position[1].x /= 2;
         position[2].x /= 2;
         position[3].x /= 2;
-        engine.drawMesh(mMesh);
 
-        position[0].x += (hw->getWidth()/2);
-        position[1].x += (hw->getWidth()/2);
-        position[2].x += (hw->getWidth()/2);
-        position[3].x += (hw->getWidth()/2);
+        float temp1 = position[0].x;
+        float temp2 = position[1].x;
+        float temp3 = position[2].x;
+        float temp4 = position[3].x;
+
+        //adjust IPD by offset
+        if(ipd_offset > 0.0){
+            position[0].x -= (hw->getWidth()/4) * ipd_offset;
+            position[1].x -= (hw->getWidth()/4) * ipd_offset;
+            position[2].x -= (hw->getWidth()/4) * ipd_offset;
+            position[3].x -= (hw->getWidth()/4) * ipd_offset;
+        }else{
+            position[0].x -= (hw->getWidth()/4) * ipd_offset;
+            position[1].x -= (hw->getWidth()/4) * ipd_offset;
+        }
+        
+        //adjust IPD by scale
+        if(ipd_scale > 0.0){
+            position[2].x = position[2].x - (hw->getWidth()/4) * ipd_scale;
+            position[3].x = position[3].x - (hw->getWidth()/4) * ipd_scale; 
+        }else{
+            position[0].x = position[0].x - (hw->getWidth()/4) * ipd_scale;
+            position[1].x = position[1].x - (hw->getWidth()/4) * ipd_scale; 
+        }
+
+        //adjust height size of left and right image. 
+        //just need to be done once, the data of position.y will be saved for the right image.
+        position[0].y = position[0].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+        position[1].y = position[1].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+        position[2].y = position[2].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+        position[3].y = position[3].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+
+        engine.drawMesh(mMesh);
+        
+        position[0].x = temp1 + (hw->getWidth()/2);
+        position[1].x = temp2 + (hw->getWidth()/2);
+        position[2].x = temp3 + (hw->getWidth()/2);
+        position[3].x = temp4 + (hw->getWidth()/2);
+
+        //adjust IPD by offset
+        if(ipd_offset > 0.0){
+            position[0].x += (hw->getWidth()/4) * ipd_offset;
+            position[1].x += (hw->getWidth()/4) * ipd_offset;
+            position[2].x += (hw->getWidth()/4) * ipd_offset;
+            position[3].x += (hw->getWidth()/4) * ipd_offset;
+        }else{
+            position[2].x += (hw->getWidth()/4) * ipd_offset;
+            position[3].x += (hw->getWidth()/4) * ipd_offset;
+        }
+        //adjust eyes-distance by scale
+        if(ipd_scale > 0.0){
+            position[0].x = position[0].x + (hw->getWidth()/4) * ipd_scale;
+            position[1].x = position[1].x + (hw->getWidth()/4) * ipd_scale; 
+        }else{
+            position[2].x = position[2].x + (hw->getWidth()/4) * ipd_scale;
+            position[3].x = position[3].x + (hw->getWidth()/4) * ipd_scale; 
+        }
     }
 
+    if(1==displayStereo && alreadyStereo){
+        position[0].y = position[0].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+        position[1].y = position[1].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+        position[2].y = position[2].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+        position[3].y = position[3].y * height_scale + hw->getHeight()*(0.5-0.5*height_scale);
+    }
+    
     if(2==displayStereo && !alreadyStereo) {
         position[0].y /= 2;
         position[1].y /= 2;
@@ -777,7 +866,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[3].y += (hw->getHeight()/2);   
     }
 }
-
+#endif
 void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
         const Region& /* clip */, float red, float green, float blue,
         float alpha) const
@@ -785,8 +874,10 @@ void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
     RenderEngine& engine(mFlinger->getRenderEngine());
     computeGeometry(hw, mMesh, false);
     engine.setupFillWithColor(red, green, blue, alpha);
+#ifdef ENABLE_STEREO_AND_DEFORM
     setStereoDraw(hw, engine, mMesh,
         mSurfaceFlingerConsumer->getAlreadyStereo(), displayStereo);
+#endif
     engine.drawMesh(mMesh);
 }
 
@@ -830,12 +921,36 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
     texCoords[1] = vec2(left, 1.0f - bottom);
     texCoords[2] = vec2(right, 1.0f - bottom);
     texCoords[3] = vec2(right, 1.0f - top);
-
+    
     RenderEngine& engine(mFlinger->getRenderEngine());
     engine.setupLayerBlending(mPremultipliedAlpha, isOpaque(s), s.alpha);
+#ifdef ENABLE_STEREO_AND_DEFORM
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.ipd_offset", value, "0");
+    float ipd_offset = atof(value);
+    if(ipd_offset > 1.0)
+        ipd_offset = 1.0;
+    if(ipd_offset < -1.0)
+        ipd_offset = -1.0;
+    //change 2¡¢3 texCoords
+    if(ipd_offset < 0.0){
+        texCoords[2].x = 1.0 + ipd_offset/2;
+        texCoords[3].x = 1.0 + ipd_offset/2;
+    }
+    
     setStereoDraw(hw, engine, mMesh, 
         mSurfaceFlingerConsumer->getAlreadyStereo(), displayStereo);
+
+    //change 0¡¢1 texCoords
+    if(ipd_offset < 0.0){
+        texCoords[2] = vec2(right, 1.0f - bottom);
+        texCoords[3] = vec2(right, 1.0f - top);
+        texCoords[0].x = 0.0 - ipd_offset/2;
+        texCoords[1].x = 0.0 - ipd_offset/2;
+    }
+#endif
     engine.drawMesh(mMesh);
+
     engine.disableBlending();
 }
 
@@ -1389,6 +1504,9 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
             // Producer doesn't want buffer to be displayed yet.  Signal a
             // layer update so we check again at the next opportunity.
             mFlinger->signalLayerUpdate();
+#ifdef ENABLE_STEREO_AND_DEFORM
+            ALOGD("invilid too1");
+#endif
             return outDirtyRegion;
         }
 
@@ -1401,6 +1519,10 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
         // Decrement the queued-frames count.  Signal another event if we
         // have more frames pending.
         if (android_atomic_dec(&mQueuedFrames) > 1) {
+#ifdef ENABLE_STEREO_AND_DEFORM
+            ALOGD("invilid too2");
+#endif
+
             mFlinger->signalLayerUpdate();
         }
 

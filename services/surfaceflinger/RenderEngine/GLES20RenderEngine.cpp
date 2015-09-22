@@ -27,6 +27,7 @@
 #include <cutils/compiler.h>
 #include <gui/ISurfaceComposer.h>
 #include <math.h>
+#include <cutils/properties.h>
 
 #include "GLES20RenderEngine.h"
 #include "Program.h"
@@ -221,6 +222,8 @@ void GLES20RenderEngine::setupFillWithColor(float r, float g, float b, float a) 
 
 void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
 
+    
+    
     ProgramCache::getInstance().useProgram(mState);
 
     if (mesh.getTexCoordsSize()) {
@@ -239,14 +242,15 @@ void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
             mesh.getPositions());
 
     glDrawArrays(mesh.getPrimitive(), 0, mesh.getVertexCount());
-
+    
     if (mesh.getTexCoordsSize()) {
         glDisableVertexAttribArray(Program::texCoords);
     }
+
 }
 
-void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
-
+#ifdef ENABLE_STEREO_AND_DEFORM
+void GLES20RenderEngine::beginGroup(const mat4& colorTransform,int mode) {
     GLuint tname, name;
     // create the texture
     glGenTextures(1, &tname);
@@ -261,18 +265,21 @@ void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
     glGenFramebuffers(1, &name);
     glBindFramebuffer(GL_FRAMEBUFFER, name);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tname, 0);
-
+    
     Group group;
     group.texture = tname;
     group.fbo = name;
     group.width = mVpWidth;
     group.height = mVpHeight;
-    group.colorTransform = colorTransform;
-
+    if(mode > 1)
+    {
+        group.colorTransform = colorTransform;
+    }    
+    
     mGroupStack.push(group);
 }
 
-void GLES20RenderEngine::endGroup() {
+void GLES20RenderEngine::endGroup(int mode) {
 
     const Group group(mGroupStack.top());
     mGroupStack.pop();
@@ -293,7 +300,129 @@ void GLES20RenderEngine::endGroup() {
     mState.setPremultipliedAlpha(true);
     mState.setOpaque(false);
     mState.setTexture(texture);
+    switch(mode)
+    {
+        case 1:
+            mState.setDeform(true);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);            
+            break;
+        case 2:
+            mState.setDeform(true);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);                        
+        case 3:
+            mState.setColorMatrix(group.colorTransform);
+            break;
+        default:
+            break;
+    }
+    glDisable(GL_BLEND);
+
+    Mesh mesh(Mesh::TRIANGLE_FAN, 4, 2, 2);
+    Mesh::VertexArray<vec2> position(mesh.getPositionArray<vec2>());
+    Mesh::VertexArray<vec2> texCoord(mesh.getTexCoordArray<vec2>());
+    position[0] = vec2(0, 0);
+    position[1] = vec2(group.width, 0);
+    position[2] = vec2(group.width, group.height);
+    position[3] = vec2(0, group.height);
+    texCoord[0] = vec2(0, 0);
+    texCoord[1] = vec2(1, 0);
+    texCoord[2] = vec2(1, 1);
+    texCoord[3] = vec2(0, 1);
+    drawMesh(mesh);
+
+    // reset color matrix
+    switch(mode)
+    {
+        case 1:
+            mState.setDeform(false);
+            break;
+        case 2:
+            mState.setDeform(false);
+        case 3:
+            mState.setColorMatrix(mat4());
+            break;
+        default:
+            break;
+    }
+
+    // free our fbo and texture
+    glDeleteFramebuffers(1, &group.fbo);
+    glDeleteTextures(1, &group.texture);
+}
+#else
+void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
+    GLuint tname, name;
+    // create the texture
+    glGenTextures(1, &tname);
+    glBindTexture(GL_TEXTURE_2D, tname);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth, mVpHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+    // create a Framebuffer Object to render into
+    glGenFramebuffers(1, &name);
+    glBindFramebuffer(GL_FRAMEBUFFER, name);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tname, 0);
+    
+    Group group;
+    group.texture = tname;
+    group.fbo = name;
+    group.width = mVpWidth;
+    group.height = mVpHeight;
+    group.colorTransform = colorTransform;
+    //if(mode > 1)
+    //{
+    //   group.colorTransform = colorTransform;
+    //}
+
+    mGroupStack.push(group);
+}
+
+void GLES20RenderEngine::endGroup() {
+
+    const Group group(mGroupStack.top());
+    mGroupStack.pop();
+
+    // activate the previous render target
+    GLuint fbo = 0;
+    if (!mGroupStack.isEmpty()) {
+        fbo = mGroupStack.top().fbo;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    
+    // set our state
+    Texture texture(Texture::TEXTURE_2D, group.texture);
+    texture.setDimensions(group.width, group.height);
+    glBindTexture(GL_TEXTURE_2D, group.texture);
+
+    mState.setPlaneAlpha(1.0f);
+    mState.setPremultipliedAlpha(true);
+    mState.setOpaque(false);
+    mState.setTexture(texture);
     mState.setColorMatrix(group.colorTransform);
+    /*
+    switch(mode)
+    {
+        case 1:
+            mState.setDeform(true);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);            
+            break;
+        case 2:
+            mState.setDeform(true);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);                        
+        case 3:
+            mState.setColorMatrix(group.colorTransform);
+            break;
+        default:
+            break;
+    }
+    */
     glDisable(GL_BLEND);
 
     Mesh mesh(Mesh::TRIANGLE_FAN, 4, 2, 2);
@@ -311,11 +440,26 @@ void GLES20RenderEngine::endGroup() {
 
     // reset color matrix
     mState.setColorMatrix(mat4());
-
+    /*
+    switch(mode)
+    {
+        case 1:
+            mState.setDeform(false);
+            break;
+        case 2:
+            mState.setDeform(false);
+        case 3:
+            mState.setColorMatrix(mat4());
+            break;
+        default:
+            break;
+    }
+    */
     // free our fbo and texture
     glDeleteFramebuffers(1, &group.fbo);
     glDeleteTextures(1, &group.texture);
 }
+#endif
 
 void GLES20RenderEngine::dump(String8& result) {
     RenderEngine::dump(result);

@@ -516,6 +516,9 @@ private:
     bool mHasColorMatrix;
     Daltonizer mDaltonizer;
     bool mDaltonize;
+#ifdef ENABLE_STEREO_AND_DEFORM
+    bool mDeform;
+#endif
     int mDebugFPS;
 
     // add by rk for workwround some display issue.
