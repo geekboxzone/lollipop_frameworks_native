@@ -182,6 +182,8 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
     fs << "precision mediump float;";
 #ifdef ENABLE_STEREO_AND_DEFORM
     fs << "uniform float deform;";
+    fs << "uniform float ipd;";
+    fs << "uniform sampler2D FogBorder;";
 #endif
     if (needs.getTextureTarget() == Key::TEXTURE_EXT) {
         fs << "uniform samplerExternalOES sampler;"
@@ -205,8 +207,8 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
         {
             // do deform process
             fs << "float offset =0.0;";
-            fs << "if(outTexCoords.x < 0.5) offset = 0.25;";
-            fs << "if(outTexCoords.x > 0.5) offset = 0.75;";
+            fs << "if(outTexCoords.x < 0.5) offset = 0.25 - ipd * 0.25;";
+            fs << "if(outTexCoords.x > 0.5) offset = 0.75 + ipd * 0.25;";
             fs << "vec2 tex = outTexCoords - vec2(offset, 0.5);";
             fs << "float k1 =1.0;";
             fs << "float k2 =deform;";

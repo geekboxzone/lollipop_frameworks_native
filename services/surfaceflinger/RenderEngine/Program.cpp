@@ -67,6 +67,8 @@ Program::Program(const ProgramCache::Key& /*needs*/, const char* vertex, const c
         mAlphaPlaneLoc = glGetUniformLocation(programId, "alphaPlane");
 #ifdef ENABLE_STEREO_AND_DEFORM
         mDeform = glGetUniformLocation(programId,"deform");
+        mIpd = glGetUniformLocation(programId,"ipd");
+        mFogBorder = glGetUniformLocation(programId,"FogBorder"); 
 #endif
 
         // set-up the default values for our uniforms
@@ -134,13 +136,26 @@ float getDeformUniform(){
     float deformargu = atof(value);
     return deformargu;
 }
+
+float getIPDUniform(){
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.ipd_offset", value, "0");
+    float ipd_offset = atof(value);
+    property_get("sys.3d.ipd_scale", value, "0");
+    float ipd_scale = atof(value);
+    if(ipd_offset != 0)
+    return ipd_offset;
+    if(ipd_scale != 0)
+    return ipd_scale;
+    return 0;
+}
+
 #endif
 
 void Program::setUniforms(const Description& desc) {
 
     // TODO: we should have a mechanism here to not always reset uniforms that
     // didn't change for this program.
-
     if (mSamplerLoc >= 0) {
         glUniform1i(mSamplerLoc, 0);
         glUniformMatrix4fv(mTextureMatrixLoc, 1, GL_FALSE, desc.mTexture.getMatrix().asArray());
@@ -151,6 +166,7 @@ void Program::setUniforms(const Description& desc) {
 #ifdef ENABLE_STEREO_AND_DEFORM
     if (mDeform >= 0) {
         glUniform1f(mDeform, getDeformUniform());
+        glUniform1f(mIpd, getIPDUniform());
     }
 #endif
 
@@ -162,6 +178,7 @@ void Program::setUniforms(const Description& desc) {
     }
     // these uniforms are always present
     glUniformMatrix4fv(mProjectionMatrixLoc, 1, GL_FALSE, desc.mProjectionMatrix.asArray());
-}
+
+} 
 
 } /* namespace android */

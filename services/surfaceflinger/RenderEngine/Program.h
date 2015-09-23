@@ -87,6 +87,10 @@ private:
 #ifdef ENABLE_STEREO_AND_DEFORM
     /* argument of deform, used in 3dDeform */
     GLint mDeform;
+
+    GLint mIpd;
+    
+    GLint mFogBorder;
 #endif
 };
 
