@@ -208,7 +208,8 @@ public:
             HWComposer::HWCLayerInterface& layer);
     void setDisplayStereo(const sp<const DisplayDevice>& hw,
             HWComposer::HWCLayerInterface& layer);
-
+    int32_t getAlreadyStereo(const sp<const DisplayDevice>& hw,
+            HWComposer::HWCLayerInterface& layer);
     Rect getPosition(const sp<const DisplayDevice>& hw);
 
     /*

@@ -222,8 +222,6 @@ void GLES20RenderEngine::setupFillWithColor(float r, float g, float b, float a) 
 
 void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
 
-    
-    
     ProgramCache::getInstance().useProgram(mState);
 
     if (mesh.getTexCoordsSize()) {
@@ -300,17 +298,19 @@ void GLES20RenderEngine::endGroup(int mode) {
     mState.setPremultipliedAlpha(true);
     mState.setOpaque(false);
     mState.setTexture(texture);
+    mState.setColorMatrix(group.colorTransform);
+
     switch(mode)
     {
         case 1:
             mState.setDeform(true);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);            
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             break;
         case 2:
             mState.setDeform(true);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);                        
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
         case 3:
             mState.setColorMatrix(group.colorTransform);
             break;
@@ -331,7 +331,7 @@ void GLES20RenderEngine::endGroup(int mode) {
     texCoord[2] = vec2(1, 1);
     texCoord[3] = vec2(0, 1);
     drawMesh(mesh);
-
+    mState.setColorMatrix(mat4());
     // reset color matrix
     switch(mode)
     {
@@ -346,7 +346,6 @@ void GLES20RenderEngine::endGroup(int mode) {
         default:
             break;
     }
-
     // free our fbo and texture
     glDeleteFramebuffers(1, &group.fbo);
     glDeleteTextures(1, &group.texture);
@@ -383,7 +382,6 @@ void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
 }
 
 void GLES20RenderEngine::endGroup() {
-
     const Group group(mGroupStack.top());
     mGroupStack.pop();
 

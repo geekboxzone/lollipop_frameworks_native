@@ -1277,6 +1277,30 @@ void SurfaceFlinger::setUpHWComposer() {
             }
         }
 
+#ifdef ENABLE_STEREO_AND_DEFORM
+        //djw:add for 3d functions
+        property_set("debug.sf.deform_ipd","1");
+        for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+            sp<const DisplayDevice> hw(mDisplays[0]);
+            const int32_t id = hw->getHwcDisplayId();
+            if (id >= 0) {
+                const Vector< sp<Layer> >& currentLayers(
+                    hw->getVisibleLayersSortedByZ());
+                const size_t count = currentLayers.size();
+                HWComposer::LayerListIterator cur = hwc.begin(id);
+                const HWComposer::LayerListIterator end = hwc.end(id);
+                for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
+                    const sp<Layer>& layer(currentLayers[i]);
+                    if (layer->getAlreadyStereo(hw, *cur)) {
+                        property_set("debug.sf.deform_ipd","0");
+                        break;
+                    }
+                }
+            }
+        }
+        //add ends
+#endif
+
         // If possible, attempt to use the cursor overlay on each display.
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
             sp<const DisplayDevice> hw(mDisplays[dpy]);
@@ -1341,10 +1365,8 @@ void SurfaceFlinger::doComposition() {
         if (hw->isDisplayOn()) {
             // transform the dirty region into this screen's coordinate space
             const Region dirtyRegion(hw->getDirtyRegion(repaintEverything));
-
             // repaint the framebuffer (if needed)
             doDisplayComposition(hw, dirtyRegion);
-
             hw->dirtyRegion.clear();
             hw->flip(hw->swapRegion);
             hw->swapRegion.clear();
@@ -1997,7 +2019,7 @@ void SurfaceFlinger::invalidateHwcGeometry()
 
 void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
         const Region& inDirtyRegion)
-{
+{   
     // We only need to actually compose the display if:
     // 1) It is being handled by hardware composer, which may need this to
     //    keep its virtual display state machine in sync, or
@@ -2078,7 +2100,6 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     if (CC_LIKELY(!mDaltonize && !mHasColorMatrix)) {
     if (!doComposeSurfaces(hw, dirtyRegion)) return;
     } else {
-
         RenderEngine& engine(getRenderEngine());
         mat4 colorMatrix = mColorMatrix;
         if (mDaltonize) {

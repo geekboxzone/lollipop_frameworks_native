@@ -1140,6 +1140,11 @@ public:
     virtual void setAlreadyStereo(int32_t alreadyStereo) {
         getLayer()->alreadyStereo = alreadyStereo;
     }
+
+    virtual int32_t getAlreadyStereo() const {
+        return getLayer()->alreadyStereo;
+    }
+    
     virtual int32_t getDisplayStereo() const {
         return getLayer()->displayStereo;
     }

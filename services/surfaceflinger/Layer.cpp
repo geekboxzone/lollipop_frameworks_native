@@ -618,6 +618,11 @@ void Layer::setDisplayStereo(const sp<const DisplayDevice>& hw,
     displayStereo = layer.getDisplayStereo();
 }
 
+int32_t Layer::getAlreadyStereo(const sp<const DisplayDevice>& hw,
+        HWComposer::HWCLayerInterface& layer) {
+    return layer.getAlreadyStereo();
+}
+
 Rect Layer::getPosition(
     const sp<const DisplayDevice>& hw)
 {
@@ -779,14 +784,20 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         ipd_offset = 1.0;
     if(ipd_offset < -1.0)
         ipd_offset = -1.0;
+
+    property_get("debug.sf.deform_ipd", value, "1");
+    float deform_ipd = atof(value);
+    if(!deform_ipd){
+        ipd_offset = 0.0;
+        ipd_scale = 0.0;
+    }
     
     if(1==displayStereo && !alreadyStereo) {
-        
         position[0].x /= 2;
         position[1].x /= 2;
         position[2].x /= 2;
         position[3].x /= 2;
-
+        
         float temp1 = position[0].x;
         float temp2 = position[1].x;
         float temp3 = position[2].x;
@@ -932,7 +943,7 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
         ipd_offset = 1.0;
     if(ipd_offset < -1.0)
         ipd_offset = -1.0;
-    //change 2、3 texCoords
+    //ipd_offset func:change 2、3 texCoords
     if(ipd_offset < 0.0){
         texCoords[2].x = 1.0 + ipd_offset/2;
         texCoords[3].x = 1.0 + ipd_offset/2;
@@ -941,7 +952,7 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
     setStereoDraw(hw, engine, mMesh, 
         mSurfaceFlingerConsumer->getAlreadyStereo(), displayStereo);
 
-    //change 0、1 texCoords
+    //ipd_offset func:change 0、1 texCoords
     if(ipd_offset < 0.0){
         texCoords[2] = vec2(right, 1.0f - bottom);
         texCoords[3] = vec2(right, 1.0f - top);

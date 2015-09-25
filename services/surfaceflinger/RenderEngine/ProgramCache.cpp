@@ -23,6 +23,7 @@
 #include "ProgramCache.h"
 #include "Program.h"
 #include "Description.h"
+#include <utils/Trace.h>
 
 namespace android {
 // -----------------------------------------------------------------------------------------------
@@ -197,26 +198,40 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
     if (needs.hasPlaneAlpha()) {
         fs << "uniform float alphaPlane;";
     }
-    if (needs.hasColorMatrix()) {
-        fs << "uniform mat4 colorMatrix;";
-    }
+    //if (needs.hasColorMatrix()) {
+    //    fs << "uniform mat4 colorMatrix;";
+    //}
     fs << "void main(void) {" << indent;
     if (needs.isTexturing()) {
 #ifdef ENABLE_STEREO_AND_DEFORM
         if(needs.hasDeform())
         {
+            
             // do deform process
             fs << "float offset =0.0;";
-            fs << "if(outTexCoords.x < 0.5) offset = 0.25 - ipd * 0.25;";
-            fs << "if(outTexCoords.x > 0.5) offset = 0.75 + ipd * 0.25;";
+            fs << "float left_border =0.0;";
+            fs << "float right_border =0.0;";
+            fs << "if(outTexCoords.x < 0.5){";
+            fs << "offset = 0.25 - ipd * 0.25;";
+            fs << "left_border =0.0;";
+            fs << "right_border =0.5;";
+            fs << "}";
+            fs << "if(outTexCoords.x > 0.5){";
+            fs << "offset = 0.75 + ipd * 0.25;";
+            fs << "left_border =0.5;";
+            fs << "right_border =1.0;";
+            fs << "}";
             fs << "vec2 tex = outTexCoords - vec2(offset, 0.5);";
             fs << "float k1 =1.0;";
             fs << "float k2 =deform;";
             fs << "tex = k1*(1.0 + k2*(pow(tex.x, 2.0) + pow(tex.y, 2.0)))*tex + vec2(offset, 0.5);";
-            fs << "if(tex.y>=0.0 && tex.y<=1.0 && tex.x>(offset-0.25) && tex.x<(offset+0.25))";
+            
+            fs << "if(tex.y>=0.0 && tex.y<=1.0 && tex.x>left_border && tex.x<right_border)";
             fs << "   gl_FragColor = texture2D(sampler, tex);";
             fs << "else";
             fs << "   gl_FragColor = vec4(0.0,0.0,0.0,0.0);";
+            
+            //fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
         }
         else
             fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
@@ -271,7 +286,6 @@ Program* ProgramCache::generateProgram(const Key& needs) {
 
 void ProgramCache::useProgram(const Description& description) {
     // generate the key for the shader based on the description
-
     Key needs(computeKey(description));
 
      // look-up the program in the cache

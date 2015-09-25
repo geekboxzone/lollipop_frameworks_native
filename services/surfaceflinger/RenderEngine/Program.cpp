@@ -138,15 +138,22 @@ float getDeformUniform(){
 }
 
 float getIPDUniform(){
+    //in realmode, we don't need to move center of deform zone
     char value[PROPERTY_VALUE_MAX];
+    property_get("debug.sf.deform_ipd", value, "0");
+    int deform_ipd = atoi(value);
+    if(!deform_ipd){
+        //property_set("debug.sf.deform_ipd","1");
+        return 0;
+    }
     property_get("sys.3d.ipd_offset", value, "0");
     float ipd_offset = atof(value);
     property_get("sys.3d.ipd_scale", value, "0");
     float ipd_scale = atof(value);
     if(ipd_offset != 0)
-    return ipd_offset;
+        return ipd_offset;
     if(ipd_scale != 0)
-    return ipd_scale;
+        return ipd_scale;
     return 0;
 }
 
