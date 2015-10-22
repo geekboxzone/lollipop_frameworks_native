@@ -309,6 +309,7 @@ public:
     virtual void setInputWindows(const Vector<sp<InputWindowHandle> >& inputWindowHandles) = 0;
 
 	virtual void setDontFocusedHome(bool dontNeedFocusHome) = 0;
+    virtual void setDualScreenConfig(bool enable) = 0;
 
 	virtual void setMultiWindowConfig(bool enable) = 0;
     /* Sets the focused application.
@@ -391,6 +392,7 @@ public:
 
     virtual void setInputWindows(const Vector<sp<InputWindowHandle> >& inputWindowHandles);
 	virtual void setDontFocusedHome(bool dontNeedFocusHome);
+    virtual void setDualScreenConfig(bool enable);
 	virtual void setMultiWindowConfig(bool enable);
     virtual void setFocusedApplication(const sp<InputApplicationHandle>& inputApplicationHandle);
     virtual void setInputDispatchMode(bool enabled, bool frozen);
@@ -1017,6 +1019,7 @@ private:
 	
 	bool dontNeedFocusHome;
 	bool multiWindowConfig;
+    bool dualScreenConfig;
 	
     // Keeping track of ANR timeouts.
     enum InputTargetWaitCause {

@@ -831,10 +831,10 @@ bool InputDispatcher::dispatchMotionLocked(
 
         logOutboundMotionDetailsLocked("dispatchMotion - ", entry);
     }
-	XLOG("dispatchMotionLocked result=%d,policyFlags=%d,multiWindowConfig=%d ",entry->interceptMotionResult,
-			entry->policyFlags,multiWindowConfig);
+	XLOG("dispatchMotionLocked result=%d,policyFlags=%d,multiWindowConfig=%d , dualScreenConfig = %d",entry->interceptMotionResult,
+			entry->policyFlags,multiWindowConfig, dualScreenConfig);
 	// Give the policy a chance to intercept the motion event - multi_window
-	if(multiWindowConfig){
+	if(multiWindowConfig || dualScreenConfig){
 	   if (entry->interceptMotionResult== MotionEntry::INTERCEPT_MOTION_RESULT_UNKNOWN) {
 		   if (entry->policyFlags & POLICY_FLAG_PASS_TO_USER) {
 			   CommandEntry* commandEntry = postCommandLocked(
@@ -2848,6 +2848,11 @@ void InputDispatcher::setMultiWindowConfig(bool enable){
 	multiWindowConfig = enable;
 	XLOG("setMultiWindowConfig enable="+enable?"true":"false");
 }
+
+void InputDispatcher::setDualScreenConfig(bool enable){
+	dualScreenConfig = enable;
+}
+
 void InputDispatcher::setInputWindows(const Vector<sp<InputWindowHandle> >& inputWindowHandles) {
 #if DEBUG_FOCUS
     ALOGD("setInputWindows");
