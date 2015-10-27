@@ -23,6 +23,10 @@ Mesh::Mesh(Primitive primitive, size_t vertexCount, size_t vertexSize, size_t te
       mPrimitive(primitive)
 {
     mVertices = new float[(vertexSize + texCoordSize) * vertexCount];
+    mVR_Vertices = new float[(vertexSize + texCoordSize) * vertexCount];
+    mVR_Vertices_r = new float[(vertexSize + texCoordSize) * vertexCount];
+    mVR_Vertices_g = new float[(vertexSize + texCoordSize) * vertexCount];
+    mVR_Vertices_b = new float[(vertexSize + texCoordSize) * vertexCount];
     mStride = mVertexSize + mTexCoordsSize;
 }
 
@@ -33,7 +37,6 @@ Mesh::~Mesh() {
 Mesh::Primitive Mesh::getPrimitive() const {
     return mPrimitive;
 }
-
 
 float const* Mesh::getPositions() const {
     return mVertices;
@@ -49,6 +52,33 @@ float* Mesh::getTexCoords() {
     return mVertices + mVertexSize;
 }
 
+float const* Mesh::VR_getPositions() const {
+    return mVR_Vertices;
+}
+float* Mesh::VR_getPositions() {
+    return mVR_Vertices;
+}
+
+float const* Mesh::VR_getTexCoords_r() const {
+    return mVR_Vertices_r + mVertexSize;
+}
+float* Mesh::VR_getTexCoords_r() {
+    return mVR_Vertices_r + mVertexSize;
+}
+
+float const* Mesh::VR_getTexCoords_g() const {
+    return mVR_Vertices_g + mVertexSize;
+}
+float* Mesh::VR_getTexCoords_g() {
+    return mVR_Vertices_g + mVertexSize;
+}
+
+float const* Mesh::VR_getTexCoords_b() const {
+    return mVR_Vertices_b + mVertexSize;
+}
+float* Mesh::VR_getTexCoords_b() {
+    return mVR_Vertices_b + mVertexSize;
+}
 
 size_t Mesh::getVertexCount() const {
     return mVertexCount;

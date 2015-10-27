@@ -34,7 +34,8 @@ class String8;
 class Program {
 public:
     // known locations for position and texture coordinates
-    enum { position=0, texCoords=1 };
+    enum { position=0, texCoords=1 ,texCoords_r = 2, texCoords_g = 3, texCoords_b = 4,
+           InBorder_r = 5,InBorder_g = 6,InBorder_b = 7};
 
     Program(const ProgramCache::Key& needs, const char* vertex, const char* fragment);
     ~Program();
@@ -84,7 +85,7 @@ private:
 
     /* location of the color uniform */
     GLint mColorLoc;
-#ifdef ENABLE_STEREO_AND_DEFORM
+#ifdef ENABLE_VR
     /* argument of deform, used in 3dDeform */
     GLint mDeform;
 

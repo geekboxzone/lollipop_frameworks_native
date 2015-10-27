@@ -61,13 +61,15 @@ protected:
     virtual void disableBlending();
 
     virtual void drawMesh(const Mesh& mesh);
-
-#ifndef ENABLE_STEREO_AND_DEFORM
-    virtual void beginGroup(const mat4& colorTransform);
-    virtual void endGroup();
-#else
+#ifdef ENABLE_VR    
+    virtual void drawMeshLeftFBO(const Mesh& mesh);
+    virtual void drawMeshRightFBO(const Mesh& mesh);
+    virtual void enableRightFBO(bool key);
     virtual void beginGroup(const mat4& colorTransform,int mode);
     virtual void endGroup(int mode);
+#else
+    virtual void beginGroup(const mat4& colorTransform);
+    virtual void endGroup();
 #endif
 
     virtual size_t getMaxTextureSize() const;

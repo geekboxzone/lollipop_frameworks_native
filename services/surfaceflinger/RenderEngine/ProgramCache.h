@@ -69,10 +69,14 @@ public:
             COLOR_MATRIX_OFF        =       0x00000000,
             COLOR_MATRIX_ON         =       0x00000020,
             COLOR_MATRIX_MASK       =       0x00000020,
-#ifdef ENABLE_STEREO_AND_DEFORM
+#ifdef ENABLE_VR
             DEFORMATION_ON          =       0x00000100,
             DEFORMATION_OFF         =       0x00000000,
             DEFORMATION_MASK        =       0x00000100,
+
+            DISPERSION_MASK         =       0x00000200,
+            DISPERSION_ON           =       0x00000200,
+            DISPERSION_OFF          =       0x00000000,
 #endif
         };
 
@@ -102,9 +106,12 @@ public:
         inline bool hasColorMatrix() const {
             return (mKey & COLOR_MATRIX_MASK) == COLOR_MATRIX_ON;
         }
-#ifdef ENABLE_STEREO_AND_DEFORM
+#ifdef ENABLE_VR
         inline bool hasDeform() const {
             return (mKey & DEFORMATION_MASK) == DEFORMATION_ON;
+        }
+        inline bool hasDispersion() const {
+            return (mKey & DISPERSION_MASK) == DISPERSION_ON;
         }
 #endif
         // this is the definition of a friend function -- not a method of class Needs

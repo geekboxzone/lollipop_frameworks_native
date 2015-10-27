@@ -54,15 +54,35 @@ public:
     VertexArray<TYPE> getPositionArray() { return VertexArray<TYPE>(getPositions(), mStride); }
 
     template <typename TYPE>
+    VertexArray<TYPE> VR_getPositionArray() { return VertexArray<TYPE>(VR_getPositions(), mStride); }
+
+    template <typename TYPE>
     VertexArray<TYPE> getTexCoordArray() { return VertexArray<TYPE>(getTexCoords(), mStride); }
+
+    template <typename TYPE>
+    VertexArray<TYPE> VR_getTexCoordArray_r() { return VertexArray<TYPE>(VR_getTexCoords_r(), mStride); }
+
+    template <typename TYPE>
+    VertexArray<TYPE> VR_getTexCoordArray_g() { return VertexArray<TYPE>(VR_getTexCoords_g(), mStride); }
+
+    template <typename TYPE>
+    VertexArray<TYPE> VR_getTexCoordArray_b() { return VertexArray<TYPE>(VR_getTexCoords_b(), mStride); }
 
     Primitive getPrimitive() const;
 
     // returns a pointer to the vertices positions
     float const* getPositions() const;
 
+    float const* VR_getPositions() const;
+
     // returns a pointer to the vertices  texture coordinates
     float const* getTexCoords() const;
+
+    float const* VR_getTexCoords_r() const;
+
+    float const* VR_getTexCoords_g() const;
+
+    float const* VR_getTexCoords_b() const;
 
     // number of vertices in this mesh
     size_t getVertexCount() const;
@@ -86,7 +106,15 @@ private:
 
     float* getPositions();
     float* getTexCoords();
+    float* VR_getPositions();
+    float* VR_getTexCoords_r();
+    float* VR_getTexCoords_g();
+    float* VR_getTexCoords_b();
     float* mVertices;
+    float* mVR_Vertices;
+    float* mVR_Vertices_r;
+    float* mVR_Vertices_g;
+    float* mVR_Vertices_b;
     size_t mVertexCount;
     size_t mVertexSize;
     size_t mTexCoordsSize;

@@ -24,6 +24,8 @@
 #include <GLES2/gl2.h>
 #include <Transform.h>
 
+#include "Program.h"
+#include "Mesh.h"
 #include "RenderEngine.h"
 #include "ProgramCache.h"
 #include "Description.h"
@@ -42,7 +44,12 @@ class GLES20RenderEngine : public RenderEngine {
     GLint mMaxTextureSize;
     GLuint mVpWidth;
     GLuint mVpHeight;
-
+    GLuint VRMeshBuffer;
+    GLuint tname, name;
+    GLuint leftFbo, leftTex;
+    GLuint rightFbo, rightTex;
+    bool useRightFBO;
+    
     struct Group {
         GLuint texture;
         GLuint fbo;
@@ -76,12 +83,29 @@ protected:
     virtual void disableBlending();
 
     virtual void drawMesh(const Mesh& mesh);
-#ifndef ENABLE_STEREO_AND_DEFORM
-    virtual void beginGroup(const mat4& colorTransform);
-    virtual void endGroup();    
-#else
+
+#ifdef ENABLE_VR
+    virtual void drawMeshLeftEye();
+    virtual void drawMeshRightEye();
+    
+    virtual void drawMeshLeftFBO(const Mesh& mesh);
+    virtual void drawMeshRightFBO(const Mesh& mesh);
+    
+    virtual void enableShaderTexArray();
+    virtual void enableShaderVerArray(int mode);
+
+    virtual GLuint genVRMeshBuffer(float halfWidth,float halfHeight);
+    virtual vec2 genDeformTex(vec2 tex,float k1,float k2);
+    
+    virtual void enableRightFBO(bool key);
+    
+    virtual bool checkVRPropertyChanged();
+    
     virtual void beginGroup(const mat4& colorTransform,int mode);
     virtual void endGroup(int mode);
+#else
+    virtual void beginGroup(const mat4& colorTransform);
+    virtual void endGroup();
 #endif
 
     virtual size_t getMaxTextureSize() const;

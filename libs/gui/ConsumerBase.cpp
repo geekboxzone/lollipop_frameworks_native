@@ -203,6 +203,7 @@ status_t ConsumerBase::acquireBufferLocked(BufferQueue::BufferItem *item,
 }
 
 int32_t ConsumerBase::getAlreadyStereo() {
+    ALOGD("djw: gui: mAlreadyStereo =%d",mAlreadyStereo);
     return mAlreadyStereo;
 }
 

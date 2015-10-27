@@ -214,6 +214,7 @@ private:
     /* ------------------------------------------------------------------------
      * IBinder interface
      */
+    void setListState(char *name, bool state);
     virtual status_t onTransact(uint32_t code, const Parcel& data,
         Parcel* reply, uint32_t flags);
     virtual status_t dump(int fd, const Vector<String16>& args);
@@ -516,7 +517,7 @@ private:
     bool mHasColorMatrix;
     Daltonizer mDaltonizer;
     bool mDaltonize;
-#ifdef ENABLE_STEREO_AND_DEFORM
+#ifdef ENABLE_VR
     bool mDeform;
 #endif
     int mDebugFPS;

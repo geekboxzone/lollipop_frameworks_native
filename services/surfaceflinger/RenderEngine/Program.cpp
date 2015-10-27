@@ -25,7 +25,6 @@
 #include <cutils/properties.h>
 
 namespace android {
-
 Program::Program(const ProgramCache::Key& /*needs*/, const char* vertex, const char* fragment)
         : mInitialized(false) {
     GLuint vertexId = buildShader(vertex, GL_VERTEX_SHADER);
@@ -35,6 +34,10 @@ Program::Program(const ProgramCache::Key& /*needs*/, const char* vertex, const c
     glAttachShader(programId, fragmentId);
     glBindAttribLocation(programId, position, "position");
     glBindAttribLocation(programId, texCoords, "texCoords");
+    glBindAttribLocation(programId, texCoords_r, "texCoords_r");
+    glBindAttribLocation(programId, texCoords_g, "texCoords_g");
+    glBindAttribLocation(programId, texCoords_b, "texCoords_b");
+
     glLinkProgram(programId);
 
     GLint status;
@@ -65,11 +68,6 @@ Program::Program(const ProgramCache::Key& /*needs*/, const char* vertex, const c
         mSamplerLoc = glGetUniformLocation(programId, "sampler");
         mColorLoc = glGetUniformLocation(programId, "color");
         mAlphaPlaneLoc = glGetUniformLocation(programId, "alphaPlane");
-#ifdef ENABLE_STEREO_AND_DEFORM
-        mDeform = glGetUniformLocation(programId,"deform");
-        mIpd = glGetUniformLocation(programId,"ipd");
-        mFogBorder = glGetUniformLocation(programId,"FogBorder"); 
-#endif
 
         // set-up the default values for our uniforms
         glUseProgram(programId);
@@ -129,39 +127,10 @@ String8& Program::dumpShader(String8& result, GLenum /*type*/) {
     return result;
 }
 
-#ifdef ENABLE_STEREO_AND_DEFORM
-float getDeformUniform(){
-    char value[PROPERTY_VALUE_MAX];
-    property_get("debug.sf.deform_argu", value, "0");
-    float deformargu = atof(value);
-    return deformargu;
-}
-
-float getIPDUniform(){
-    //in realmode, we don't need to move center of deform zone
-    char value[PROPERTY_VALUE_MAX];
-    property_get("debug.sf.deform_ipd", value, "0");
-    int deform_ipd = atoi(value);
-    if(!deform_ipd){
-        //property_set("debug.sf.deform_ipd","1");
-        return 0;
-    }
-    property_get("sys.3d.ipd_offset", value, "0");
-    float ipd_offset = atof(value);
-    property_get("sys.3d.ipd_scale", value, "0");
-    float ipd_scale = atof(value);
-    if(ipd_offset != 0)
-        return ipd_offset;
-    if(ipd_scale != 0)
-        return ipd_scale;
-    return 0;
-}
-
-#endif
-
 void Program::setUniforms(const Description& desc) {
 
-    // TODO: we should have a mechanism here to not always reset uniforms that
+    // TODO: we should have a mechanism here to not always reset uniforms that   
+    
     // didn't change for this program.
     if (mSamplerLoc >= 0) {
         glUniform1i(mSamplerLoc, 0);
@@ -170,12 +139,6 @@ void Program::setUniforms(const Description& desc) {
     if (mAlphaPlaneLoc >= 0) {
         glUniform1f(mAlphaPlaneLoc, desc.mPlaneAlpha);
     }
-#ifdef ENABLE_STEREO_AND_DEFORM
-    if (mDeform >= 0) {
-        glUniform1f(mDeform, getDeformUniform());
-        glUniform1f(mIpd, getIPDUniform());
-    }
-#endif
 
     if (mColorLoc >= 0) {
         glUniform4fv(mColorLoc, 1, desc.mColor);

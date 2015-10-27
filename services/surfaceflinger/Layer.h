@@ -81,9 +81,11 @@ public:
     // have a stable sort order when their layer stack and Z-order are
     // the same.
     int32_t sequence;
-
+    
     int32_t displayStereo;
 
+    mutable int mStereoMode;
+    
     enum { // flags for doTransaction()
         eDontUpdateGeometryState = 0x00000001,
         eVisibleRegion = 0x00000002,
@@ -210,6 +212,9 @@ public:
             HWComposer::HWCLayerInterface& layer);
     int32_t getAlreadyStereo(const sp<const DisplayDevice>& hw,
             HWComposer::HWCLayerInterface& layer);
+    int getStereoModeToDraw()const;
+    void setAlreadyStereo(const sp<const DisplayDevice>& hw,
+            HWComposer::HWCLayerInterface& layer,int flag);            
     Rect getPosition(const sp<const DisplayDevice>& hw);
 
     /*

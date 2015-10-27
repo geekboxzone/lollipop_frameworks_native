@@ -120,21 +120,7 @@ void ProgramCache::primeCache() {
 
 ProgramCache::Key ProgramCache::computeKey(const Description& description) {
     Key needs;
-#ifndef ENABLE_STEREO_AND_DEFORM
-    needs.set(Key::TEXTURE_MASK,
-            !description.mTextureEnabled ? Key::TEXTURE_OFF :
-            description.mTexture.getTextureTarget() == GL_TEXTURE_EXTERNAL_OES ? Key::TEXTURE_EXT :
-            description.mTexture.getTextureTarget() == GL_TEXTURE_2D           ? Key::TEXTURE_2D :
-            Key::TEXTURE_OFF)
-    .set(Key::PLANE_ALPHA_MASK,
-            (description.mPlaneAlpha < 1) ? Key::PLANE_ALPHA_LT_ONE : Key::PLANE_ALPHA_EQ_ONE)
-    .set(Key::BLEND_MASK,
-            description.mPremultipliedAlpha ? Key::BLEND_PREMULT : Key::BLEND_NORMAL)
-    .set(Key::OPACITY_MASK,
-            description.mOpaque ? Key::OPACITY_OPAQUE : Key::OPACITY_TRANSLUCENT)
-    .set(Key::COLOR_MATRIX_MASK,
-            description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON :  Key::COLOR_MATRIX_OFF);
-#else
+#ifdef ENABLE_VR
     needs.set(Key::TEXTURE_MASK,
             !description.mTextureEnabled ? Key::TEXTURE_OFF :
             description.mTexture.getTextureTarget() == GL_TEXTURE_EXTERNAL_OES ? Key::TEXTURE_EXT :
@@ -149,7 +135,23 @@ ProgramCache::Key ProgramCache::computeKey(const Description& description) {
     .set(Key::COLOR_MATRIX_MASK,
             description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON :  Key::COLOR_MATRIX_OFF)
     .set(Key::DEFORMATION_MASK,
-            description.mDeformEnabled ? Key::DEFORMATION_ON : Key::DEFORMATION_OFF);
+            description.mDeformEnabled ? Key::DEFORMATION_ON : Key::DEFORMATION_OFF)
+    .set(Key::DISPERSION_MASK,
+            description.mDispersionEnabled ? Key::DISPERSION_ON : Key::DISPERSION_OFF);
+#else
+    needs.set(Key::TEXTURE_MASK,
+            !description.mTextureEnabled ? Key::TEXTURE_OFF :
+            description.mTexture.getTextureTarget() == GL_TEXTURE_EXTERNAL_OES ? Key::TEXTURE_EXT :
+            description.mTexture.getTextureTarget() == GL_TEXTURE_2D           ? Key::TEXTURE_2D :
+            Key::TEXTURE_OFF)
+    .set(Key::PLANE_ALPHA_MASK,
+            (description.mPlaneAlpha < 1) ? Key::PLANE_ALPHA_LT_ONE : Key::PLANE_ALPHA_EQ_ONE)
+    .set(Key::BLEND_MASK,
+            description.mPremultipliedAlpha ? Key::BLEND_PREMULT : Key::BLEND_NORMAL)
+    .set(Key::OPACITY_MASK,
+            description.mOpaque ? Key::OPACITY_OPAQUE : Key::OPACITY_TRANSLUCENT)
+    .set(Key::COLOR_MATRIX_MASK,
+            description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON :  Key::COLOR_MATRIX_OFF);
 #endif
 
     return needs;
@@ -159,6 +161,14 @@ String8 ProgramCache::generateVertexShader(const Key& needs) {
     Formatter vs;
     if (needs.isTexturing()) {
         vs  << "attribute vec4 texCoords;"
+            << "attribute vec4 texCoords_r;"
+            << "attribute vec4 texCoords_g;"
+            << "attribute vec4 texCoords_b;"            
+            
+            << "varying vec2 outTexCoords_r;"
+            << "varying vec2 outTexCoords_g;"
+            << "varying vec2 outTexCoords_b;"
+            
             << "varying vec2 outTexCoords;";
     }
     vs << "attribute vec4 position;"
@@ -167,7 +177,10 @@ String8 ProgramCache::generateVertexShader(const Key& needs) {
        << "void main(void) {" << indent
        << "gl_Position = projection * position;";
     if (needs.isTexturing()) {
-        vs << "outTexCoords = (texture * texCoords).st;";
+        vs << "outTexCoords = (texture * texCoords).st;"
+           << "outTexCoords_r = (texture * texCoords_r).st;"
+           << "outTexCoords_g = (texture * texCoords_g).st;"
+           << "outTexCoords_b = (texture * texCoords_b).st;";
     }
     vs << dedent << "}";
     return vs.getString();
@@ -181,17 +194,22 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
 
     // default precision is required-ish in fragment shaders
     fs << "precision mediump float;";
-#ifdef ENABLE_STEREO_AND_DEFORM
-    fs << "uniform float deform;";
-    fs << "uniform float ipd;";
-    fs << "uniform sampler2D FogBorder;";
-#endif
     if (needs.getTextureTarget() == Key::TEXTURE_EXT) {
         fs << "uniform samplerExternalOES sampler;"
-           << "varying vec2 outTexCoords;";
+           << "uniform sampler2D FogBorder;"
+           << "varying vec2 outTexCoords;"
+           << "varying vec2 outTexCoords_r;"
+           << "varying vec2 outTexCoords_g;"
+           << "varying vec2 outTexCoords_b;";
+
     } else if (needs.getTextureTarget() == Key::TEXTURE_2D) {
         fs << "uniform sampler2D sampler;"
-           << "varying vec2 outTexCoords;";
+
+           << "varying vec2 outTexCoords;"
+           << "varying vec2 outTexCoords_r;"
+           << "varying vec2 outTexCoords_g;"
+           << "varying vec2 outTexCoords_b;";
+
     } else if (needs.getTextureTarget() == Key::TEXTURE_OFF) {
         fs << "uniform vec4 color;";
     }
@@ -203,38 +221,28 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
     //}
     fs << "void main(void) {" << indent;
     if (needs.isTexturing()) {
-#ifdef ENABLE_STEREO_AND_DEFORM
+#ifdef ENABLE_VR
         if(needs.hasDeform())
-        {
-            
-            // do deform process
-            fs << "float offset =0.0;";
-            fs << "float left_border =0.0;";
-            fs << "float right_border =0.0;";
-            fs << "if(outTexCoords.x < 0.5){";
-            fs << "offset = 0.25 - ipd * 0.25;";
-            fs << "left_border =0.0;";
-            fs << "right_border =0.5;";
-            fs << "}";
-            fs << "if(outTexCoords.x > 0.5){";
-            fs << "offset = 0.75 + ipd * 0.25;";
-            fs << "left_border =0.5;";
-            fs << "right_border =1.0;";
-            fs << "}";
-            fs << "vec2 tex = outTexCoords - vec2(offset, 0.5);";
-            fs << "float k1 =1.0;";
-            fs << "float k2 =deform;";
-            fs << "tex = k1*(1.0 + k2*(pow(tex.x, 2.0) + pow(tex.y, 2.0)))*tex + vec2(offset, 0.5);";
-            
-            fs << "if(tex.y>=0.0 && tex.y<=1.0 && tex.x>left_border && tex.x<right_border)";
-            fs << "   gl_FragColor = texture2D(sampler, tex);";
-            fs << "else";
-            fs << "   gl_FragColor = vec4(0.0,0.0,0.0,0.0);";
-            
-            //fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
+        {                 
+            if(needs.hasDispersion()){
+                //fs << "if(outTexCoords_r.x>=0.0 && outTexCoords_r.x<=1.0 && outTexCoords_r.y>=0.0 && outTexCoords_r.y<=1.0)";
+                //fs << "if(outTexCoords_g.x>=0.0 && outTexCoords_g.x<=1.0 && outTexCoords_g.y>=0.0 && outTexCoords_g.y<=1.0)";
+                //fs << "if(outTexCoords_b.y>=0.0 && outTexCoords_b.y<=1.0){";            
+                fs << "gl_FragColor.r = texture2D(sampler, outTexCoords_r).r;";
+                fs << "gl_FragColor.g = texture2D(sampler, outTexCoords_g).g;";
+                fs << "gl_FragColor.b = texture2D(sampler, outTexCoords_b).b;";
+                fs << "gl_FragColor.a = 1.0;";
+                //fs << "}else{";
+                //fs << "   gl_FragColor = vec4(0.0,0.0,0.0,0.0);";
+                //fs << "}";
+            }else{
+                fs << "gl_FragColor   = texture2D(sampler, outTexCoords_r);";
+                fs << "gl_FragColor.a = 1.0;";
+            }
         }
         else
-            fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
+            fs << "   gl_FragColor = texture2D(sampler, outTexCoords);";
+
 #else
         fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
 #endif

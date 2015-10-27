@@ -15,6 +15,13 @@
  */
 
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
+#define Warp_Mesh_Resolution_X 64
+#define Warp_Mesh_Resolution_Y 64
+#define VR_Buffer_Stride 10
+#define Screen_X 1536.0f
+#define Screen_Y 2048.0f
+#define LEFT 1
+#define RIGHT 2
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -39,10 +46,20 @@
 // ---------------------------------------------------------------------------
 namespace android {
 // ---------------------------------------------------------------------------
-
 GLES20RenderEngine::GLES20RenderEngine() :
-        mVpWidth(0), mVpHeight(0) {
-
+        mVpWidth(0), 
+        mVpHeight(0),
+        VRMeshBuffer(0),
+        tname(0),
+        name(0),
+        leftFbo(0),
+        rightFbo(0),
+        leftTex(0),
+        rightTex(0),
+        useRightFBO(false)
+{           
+    VRMeshBuffer = genVRMeshBuffer(Screen_X,Screen_Y);
+    
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mMaxTextureSize);
     glGetIntegerv(GL_MAX_VIEWPORT_DIMS, mMaxViewportDims);
 
@@ -223,7 +240,7 @@ void GLES20RenderEngine::setupFillWithColor(float r, float g, float b, float a) 
 void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
 
     ProgramCache::getInstance().useProgram(mState);
-
+    
     if (mesh.getTexCoordsSize()) {
         glEnableVertexAttribArray(Program::texCoords);
         glVertexAttribPointer(Program::texCoords,
@@ -238,7 +255,7 @@ void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
             GL_FLOAT, GL_FALSE,
             mesh.getByteStride(),
             mesh.getPositions());
-
+    
     glDrawArrays(mesh.getPrimitive(), 0, mesh.getVertexCount());
     
     if (mesh.getTexCoordsSize()) {
@@ -247,59 +264,395 @@ void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
 
 }
 
-#ifdef ENABLE_STEREO_AND_DEFORM
-void GLES20RenderEngine::beginGroup(const mat4& colorTransform,int mode) {
-    GLuint tname, name;
-    // create the texture
-    glGenTextures(1, &tname);
-    glBindTexture(GL_TEXTURE_2D, tname);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth, mVpHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-
-    // create a Framebuffer Object to render into
-    glGenFramebuffers(1, &name);
-    glBindFramebuffer(GL_FRAMEBUFFER, name);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tname, 0);
+#ifdef ENABLE_VR
+void GLES20RenderEngine::drawMeshLeftEye() {
+    ProgramCache::getInstance().useProgram(mState);
     
+    enableShaderTexArray();
+    enableShaderVerArray(LEFT);
+    glDrawArrays(Mesh::TRIANGLES, 0, Warp_Mesh_Resolution_X * Warp_Mesh_Resolution_Y * 6);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void GLES20RenderEngine::drawMeshRightEye() {
+    ProgramCache::getInstance().useProgram(mState);
+    
+    enableShaderTexArray();
+    enableShaderVerArray(RIGHT);    
+    glDrawArrays(Mesh::TRIANGLES, 0,Warp_Mesh_Resolution_X * Warp_Mesh_Resolution_Y * 6);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void GLES20RenderEngine::drawMeshLeftFBO(const Mesh& mesh) {
+    glBindFramebuffer(GL_FRAMEBUFFER, leftFbo);
+    mState.setDeform(false);
+    ProgramCache::getInstance().useProgram(mState);
+    
+    if (mesh.getTexCoordsSize()) {
+        glEnableVertexAttribArray(Program::texCoords);
+        glVertexAttribPointer(Program::texCoords,
+                mesh.getTexCoordsSize(),
+                GL_FLOAT, GL_FALSE,
+                mesh.getByteStride(),
+                mesh.getTexCoords());
+    }
+
+    glVertexAttribPointer(Program::position,
+            mesh.getVertexSize(),
+            GL_FLOAT, GL_FALSE,
+            mesh.getByteStride(),
+            mesh.getPositions());
+    
+    glDrawArrays(mesh.getPrimitive(), 0, mesh.getVertexCount());
+    
+    if (mesh.getTexCoordsSize()) {
+        glDisableVertexAttribArray(Program::texCoords);
+    }
+
+}
+
+void GLES20RenderEngine::drawMeshRightFBO(const Mesh& mesh) {
+    glBindFramebuffer(GL_FRAMEBUFFER, rightFbo);
+    mState.setDeform(false);
+    ProgramCache::getInstance().useProgram(mState);
+    
+    if (mesh.getTexCoordsSize()) {
+        glEnableVertexAttribArray(Program::texCoords);
+        glVertexAttribPointer(Program::texCoords,
+                mesh.getTexCoordsSize(),
+                GL_FLOAT, GL_FALSE,
+                mesh.getByteStride(),
+                mesh.getTexCoords());
+    }
+
+    glVertexAttribPointer(Program::position,
+            mesh.getVertexSize(),
+            GL_FLOAT, GL_FALSE,
+            mesh.getByteStride(),
+            mesh.getPositions());
+    
+    glDrawArrays(mesh.getPrimitive(), 0, mesh.getVertexCount());
+    
+    if (mesh.getTexCoordsSize()) {
+        glDisableVertexAttribArray(Program::texCoords);
+    }
+
+}
+
+void GLES20RenderEngine::enableShaderTexArray(){
+    glBindBuffer(GL_ARRAY_BUFFER, VRMeshBuffer);
+  
+    //rgb texCoords
+    glEnableVertexAttribArray(Program::texCoords_r);
+    glVertexAttribPointer(Program::texCoords_r,
+        2,
+        GL_FLOAT, GL_FALSE,
+        VR_Buffer_Stride*sizeof(float),
+        (void*)(4 * sizeof(GLfloat)));
+
+    glEnableVertexAttribArray(Program::texCoords_g);
+    glVertexAttribPointer(Program::texCoords_g,
+        2,
+        GL_FLOAT, GL_FALSE,
+        VR_Buffer_Stride*sizeof(float),
+        (void*)(6 * sizeof(GLfloat)));
+
+    glEnableVertexAttribArray(Program::texCoords_b);
+    glVertexAttribPointer(Program::texCoords_b,
+        2,
+        GL_FLOAT, GL_FALSE,
+        VR_Buffer_Stride*sizeof(float),
+        (void*)(8 * sizeof(GLfloat)));
+}
+
+void GLES20RenderEngine::enableShaderVerArray(int mode){
+    glBindBuffer(GL_ARRAY_BUFFER, VRMeshBuffer);
+    
+    if(LEFT == mode){    
+        glEnableVertexAttribArray(Program::position);
+        glVertexAttribPointer(Program::position,
+            2,
+            GL_FLOAT, GL_FALSE,
+            VR_Buffer_Stride*sizeof(float),
+            (void*)(0 * sizeof(GLfloat)));
+    }
+
+    if(RIGHT == mode){
+        glEnableVertexAttribArray(Program::position);
+        glVertexAttribPointer(Program::position,
+            2,
+            GL_FLOAT, GL_FALSE,
+            VR_Buffer_Stride*sizeof(float),
+            (void*)(2 * sizeof(GLfloat)));                 
+    }
+}
+
+vec2 GLES20RenderEngine::genDeformTex(vec2 tex,float k1,float k2){
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.height", value, "0.5");
+    float Scale = atof(value);
+    property_get("sys.3d.ipd_scale", value, "0");
+    float ipdByScale = atof(value);
+    if(ipdByScale < 0)
+        ipdByScale  = (-1.0) * ipdByScale;
+
+    float xyRatio = (Screen_X * Scale)/ ((Screen_Y/2) * (1.0 - 0.5 * ipdByScale));
+    tex = tex - vec2(0.5);
+    tex.x = tex.x * xyRatio;
+    
+    float len = length(tex);
+    float r2 = pow(len,2.0);
+    float r4 = pow(len,4.0);
+    tex = tex * (1 + k1 * r2 + k2 * r4);
+    
+    tex.x = tex.x / xyRatio;
+    tex = tex + vec2(0.5);
+    
+    return tex;
+}
+
+GLuint GLES20RenderEngine::genVRMeshBuffer(float width,float height){
+    struct Vertex
+    {
+        vec2 left_position;
+        vec2 right_position;
+        vec2 uv_red;
+        vec2 uv_green;
+        vec2 uv_blue;
+    };
+    static Vertex v[(Warp_Mesh_Resolution_X + 1) * (Warp_Mesh_Resolution_Y + 1)];
+
+    char value[PROPERTY_VALUE_MAX];
+    //r g b deform property set
+    property_get("sys.3d.deform_red1", value, "0");
+    float rk1 = atof(value);
+    property_get("sys.3d.deform_red2", value, "0");
+    float rk2 = atof(value);
+    property_get("sys.3d.deform_green1", value, "0");
+    float gk1 = atof(value);
+    property_get("sys.3d.deform_green2", value, "0");
+    float gk2 = atof(value);
+    property_get("sys.3d.deform_blue1", value, "0");
+    float bk1 = atof(value);
+    property_get("sys.3d.deform_blue2", value, "0");
+    float bk2 = atof(value);
+
+    //height property set
+    property_get("sys.3d.height", value, "0.5");
+    float heightScale = atof(value);
+
+    /*IPD property set
+      IPD Offset priority is higher than Scale
+      if Offset != 0, we set the Scale = 0*/
+    float ipdMaxSize = (Screen_Y/2)/10.0f;
+    property_get("sys.3d.ipd_offset", value, "0");
+    float ipdByOffset = atof(value);
+    property_get("sys.3d.ipd_scale", value, "0");
+    float ipdByScale = atof(value);
+    if(ipdByOffset!=0 && ipdByScale!=0)
+    ipdByScale = 0.0f;
+
+    //size of fbo
+    float finalHeight = height * 0.5;
+    float finalWidth  = width  * heightScale;
+    
+    // Compute vertices
+    int vi = 0;
+    for (int yi = 0; yi <= Warp_Mesh_Resolution_Y; yi++)
+    for (int xi = 0; xi <= Warp_Mesh_Resolution_X; xi++)
+        {
+            float x = float(xi) / float(Warp_Mesh_Resolution_X);
+            float y = float(yi) / float(Warp_Mesh_Resolution_Y);
+
+            vec2 tex = vec2(x,y);        
+
+            //vec position's range is frome Screen_X & Screen_Y,not 0~1
+            v[vi].left_position  = vec2(finalWidth*x + Screen_X * ((1 - heightScale) * 0.5),finalHeight*y);
+            v[vi].right_position = vec2(finalWidth*x + Screen_X * ((1 - heightScale) * 0.5),finalHeight*y+finalHeight);
+            
+            v[vi].uv_red    = genDeformTex(tex,rk1,rk2);
+            v[vi].uv_green  = genDeformTex(tex,gk1,gk2);
+            v[vi].uv_blue   = genDeformTex(tex,bk1,bk2);
+
+            //if enable IPD_Offset
+            v[vi].left_position.y  = v[vi].left_position.y  + ipdMaxSize * ipdByOffset;
+            v[vi].right_position.y = v[vi].right_position.y - ipdMaxSize * ipdByOffset;
+            v[vi].left_position.y  = ( v[vi].left_position.y < finalHeight) ?  v[vi].left_position.y : finalHeight;
+            v[vi].right_position.y = (v[vi].right_position.y > finalHeight) ? v[vi].right_position.y : finalHeight;
+
+            //if enable IPD_Scale
+            if(ipdByScale > 0){
+                float screenScale = 1.0 - 0.5 * ipdByScale;
+                v[vi].left_position.y  = v[vi].left_position.y * screenScale;
+                v[vi].right_position.y = v[vi].right_position.y * screenScale + (Screen_Y/4.0f) * ipdByScale * 2.0f;
+            }
+            if(ipdByScale < 0){
+                float ipdByScale_abs = (-1.0f) * ipdByScale;
+                float screenScale = 1.0 - 0.5 * ipdByScale_abs;
+                v[vi].left_position.y  = v[vi].left_position.y * screenScale + (Screen_Y/4.0f) * ipdByScale_abs;
+                v[vi].right_position.y = v[vi].right_position.y * screenScale + (Screen_Y/4.0f) * ipdByScale_abs;
+            }
+            
+            vi++;
+        }
+
+    // Generate faces from vertices
+    static Vertex f[Warp_Mesh_Resolution_X * Warp_Mesh_Resolution_Y * 6];
+    int fi = 0;
+    for (int yi = 0; yi < Warp_Mesh_Resolution_Y; yi++)
+    for (int xi = 0; xi < Warp_Mesh_Resolution_X; xi++)
+    {
+        Vertex v0 = v[(yi    ) * (Warp_Mesh_Resolution_X + 1) + xi    ];
+        Vertex v1 = v[(yi    ) * (Warp_Mesh_Resolution_X + 1) + xi + 1];
+        Vertex v2 = v[(yi + 1) * (Warp_Mesh_Resolution_X + 1) + xi + 1];
+        Vertex v3 = v[(yi + 1) * (Warp_Mesh_Resolution_X + 1) + xi    ];
+        f[fi++] = v0;
+        f[fi++] = v1;
+        f[fi++] = v2;
+        f[fi++] = v2;
+        f[fi++] = v3;
+        f[fi++] = v0;
+    }
+
+    GLuint result = 0;
+    glGenBuffers(1, &result);
+    glBindBuffer(GL_ARRAY_BUFFER, result);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(f), f, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    return result;
+}
+
+void GLES20RenderEngine::enableRightFBO(bool key){
+    if(key)
+        useRightFBO = true;
+    else
+        useRightFBO = false;
+}
+
+bool GLES20RenderEngine::checkVRPropertyChanged(){
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.property_update", value, "0");
+    int result = atoi(value);
+
+    if(result){
+        property_set("sys.3d.property_update","0");
+        return true;
+    }else 
+        return false;
+}
+
+//judge whether need to generate VRMeshBuffer or not
+void GLES20RenderEngine::beginGroup(const mat4& colorTransform,int mode) {
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.height", value, "0.5");
+    float heightScale = atof(value);
+
+    //check whether need to recompute MeshBuffer 
+    if(checkVRPropertyChanged()){
+        VRMeshBuffer = genVRMeshBuffer(Screen_X,Screen_Y);
+        
+        glBindTexture(GL_TEXTURE_2D, leftTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth * heightScale, mVpHeight * 0.5, 0, GL_RGBA, GL_UNSIGNED_BYTE,0);
+        glBindFramebuffer(GL_FRAMEBUFFER, leftFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, leftTex, 0);
+
+        glBindTexture(GL_TEXTURE_2D, rightTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth * heightScale, mVpHeight * 0.5, 0, GL_RGBA, GL_UNSIGNED_BYTE,0);
+        glBindFramebuffer(GL_FRAMEBUFFER, rightFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rightTex, 0);
+    }
+
+    //create Texture¡¢FBO   
+    if(GL_FALSE == glIsFramebuffer(leftFbo)){
+        //the color out of border of texCoords
+        float color[4] = { 0.0f, 0.0f, 0.0f, 1.0f };  
+        
+        /*create Left FBO
+          0x812D:   GL_CLAMP_TO_BORDER
+          0x1004:   GL_TEXTURE_BORDER_COLOR*/
+        glGenTextures(1, &leftTex);
+        glBindTexture(GL_TEXTURE_2D, leftTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812D);
+        glTexParameterfv( GL_TEXTURE_2D, 0x1004, color);  
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth * heightScale, mVpHeight * 0.5, 0, GL_RGBA, GL_UNSIGNED_BYTE,0);
+        glGenFramebuffers(1, &leftFbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, leftFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, leftTex, 0);
+
+        //create Right FBO
+        glGenTextures(1, &rightTex);
+        glBindTexture(GL_TEXTURE_2D, rightTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812D);
+        glTexParameterfv( GL_TEXTURE_2D, 0x1004, color);  
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth * heightScale, mVpHeight * 0.5, 0, GL_RGBA, GL_UNSIGNED_BYTE,0);
+        glGenFramebuffers(1, &rightFbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, rightFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rightTex, 0);
+
+        //Stack FBO:nothing to be used
+        glGenTextures(1, &tname);
+        glBindTexture(GL_TEXTURE_2D, tname);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+        // create a Framebuffer Object to render into
+        glGenFramebuffers(1, &name);
+    }
+    
+    //glBindFramebuffer(GL_FRAMEBUFFER, name);
+    glBindFramebuffer(GL_FRAMEBUFFER, leftFbo);
     Group group;
+    
     group.texture = tname;
     group.fbo = name;
     group.width = mVpWidth;
     group.height = mVpHeight;
+
+    mGroupStack.push(group);
+   
     if(mode > 1)
-    {
+    {   
         group.colorTransform = colorTransform;
     }    
     
-    mGroupStack.push(group);
 }
 
 void GLES20RenderEngine::endGroup(int mode) {
-
     const Group group(mGroupStack.top());
     mGroupStack.pop();
-
+    
     // activate the previous render target
     GLuint fbo = 0;
     if (!mGroupStack.isEmpty()) {
         fbo = mGroupStack.top().fbo;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    
+    //set Texture and State for the Shader
+    Texture LeftTexture(Texture::TEXTURE_2D, leftTex);
+    LeftTexture.setDimensions(group.width, group.height);
+    glBindTexture(GL_TEXTURE_2D, leftTex);
 
-    // set our state
-    Texture texture(Texture::TEXTURE_2D, group.texture);
-    texture.setDimensions(group.width, group.height);
-    glBindTexture(GL_TEXTURE_2D, group.texture);
+    Texture RightTexture(Texture::TEXTURE_2D, rightTex);
+    RightTexture.setDimensions(group.width, group.height);
+    glBindTexture(GL_TEXTURE_2D, rightTex);
 
     mState.setPlaneAlpha(1.0f);
     mState.setPremultipliedAlpha(true);
     mState.setOpaque(false);
-    mState.setTexture(texture);
     mState.setColorMatrix(group.colorTransform);
-
+   
     switch(mode)
     {
         case 1:
@@ -319,18 +672,34 @@ void GLES20RenderEngine::endGroup(int mode) {
     }
     glDisable(GL_BLEND);
 
-    Mesh mesh(Mesh::TRIANGLE_FAN, 4, 2, 2);
-    Mesh::VertexArray<vec2> position(mesh.getPositionArray<vec2>());
-    Mesh::VertexArray<vec2> texCoord(mesh.getTexCoordArray<vec2>());
-    position[0] = vec2(0, 0);
-    position[1] = vec2(group.width, 0);
-    position[2] = vec2(group.width, group.height);
-    position[3] = vec2(0, group.height);
-    texCoord[0] = vec2(0, 0);
-    texCoord[1] = vec2(1, 0);
-    texCoord[2] = vec2(1, 1);
-    texCoord[3] = vec2(0, 1);
-    drawMesh(mesh);
+    //whether enable dispersion 
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.sf.dispersion", value, "0");
+    int dispersionEnabled = atoi(value);
+    if(dispersionEnabled)
+        mState.setDisper(true);
+    else
+        mState.setDisper(false);
+
+    //draw fb for left eye
+    glBindTexture(GL_TEXTURE_2D, leftTex);
+    mState.setTexture(LeftTexture);
+    drawMeshLeftEye();
+
+    /*draw fb for right eye
+      enable right FBO according to the value of useRightFBO */
+    if(useRightFBO){
+        glBindTexture(GL_TEXTURE_2D, rightTex);
+        mState.setTexture(RightTexture);
+        drawMeshRightEye();
+    }else{
+        mState.setTexture(LeftTexture);            
+        drawMeshRightEye();
+    }
+
+    //disable right FBO
+    enableRightFBO(false);
+    
     mState.setColorMatrix(mat4());
     // reset color matrix
     switch(mode)
@@ -346,9 +715,7 @@ void GLES20RenderEngine::endGroup(int mode) {
         default:
             break;
     }
-    // free our fbo and texture
-    glDeleteFramebuffers(1, &group.fbo);
-    glDeleteTextures(1, &group.texture);
+
 }
 #else
 void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
@@ -458,6 +825,8 @@ void GLES20RenderEngine::endGroup() {
     glDeleteTextures(1, &group.texture);
 }
 #endif
+
+
 
 void GLES20RenderEngine::dump(String8& result) {
     RenderEngine::dump(result);
