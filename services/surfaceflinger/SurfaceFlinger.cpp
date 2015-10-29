@@ -3093,6 +3093,7 @@ bool SurfaceFlinger::startDdmConnection()
     return true;
 }
 
+#ifdef ENABLE_VR
 void SurfaceFlinger::setListState(char *name, bool state)
 {   
     struct app_info_t {
@@ -3130,6 +3131,7 @@ void SurfaceFlinger::setListState(char *name, bool state)
         }
     }
 }
+#endif
 
 status_t SurfaceFlinger::onTransact(
     uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)

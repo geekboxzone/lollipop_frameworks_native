@@ -15,8 +15,8 @@
  */
 
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
-#define Warp_Mesh_Resolution_X 64
-#define Warp_Mesh_Resolution_Y 64
+#define Warp_Mesh_Resolution_X 4
+#define Warp_Mesh_Resolution_Y 4
 #define VR_Buffer_Stride 10
 #define Screen_X 1536.0f
 #define Screen_Y 2048.0f
@@ -51,15 +51,18 @@ GLES20RenderEngine::GLES20RenderEngine() :
         mVpHeight(0),
         VRMeshBuffer(0),
         tname(0),
-        name(0),
+        name(0),        
         leftFbo(0),
         rightFbo(0),
         leftTex(0),
         rightTex(0),
         useRightFBO(false)
-{           
+{   
+
+#ifdef ENABLE_VR
     VRMeshBuffer = genVRMeshBuffer(Screen_X,Screen_Y);
-    
+#endif
+
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mMaxTextureSize);
     glGetIntegerv(GL_MAX_VIEWPORT_DIMS, mMaxViewportDims);
 
