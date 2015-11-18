@@ -74,6 +74,7 @@
 #include "DisplayHardware/VirtualDisplaySurface.h"
 
 #include "Effects/Daltonizer.h"
+#include "stabilizer.h"
 
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
@@ -161,7 +162,7 @@ SurfaceFlinger::SurfaceFlinger()
         mDelayFlag(0)
 {
     ALOGI("SurfaceFlinger is starting");
-
+    
     // debugging stuff...
     char value[PROPERTY_VALUE_MAX];
 
@@ -221,6 +222,9 @@ void SurfaceFlinger::onFirstRef()
 
 SurfaceFlinger::~SurfaceFlinger()
 {
+    if (mSimilarityThread != NULL) {
+        mSimilarityThread->requestExitAndWait();
+    }
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(display);
@@ -531,6 +535,9 @@ void SurfaceFlinger::init() {
     memset(value,0,PROPERTY_VALUE_MAX);
     property_get("sys.enable.wfd.optimize", value, "0");
     mWfdOptimize = atoi(value);
+
+    //mSimilarityThread  = new SimilarityThread(*mRenderEngine);
+    
     // start boot animation
     startBootAnim();
 }
@@ -1069,7 +1076,7 @@ void SurfaceFlinger::preComposition()
     }
     if (needExtraInvalidate) {
 #ifdef ENABLE_VR
-            ALOGD("invilid too3");
+            //ALOGD("invilid too3");
 #endif
 
         signalLayerUpdate();
@@ -2105,6 +2112,16 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
 
     // swap buffers (presentation)
     hw->swapBuffers(getHwComposer());
+
+    //**** Similarity test ****    
+    //RenderEngine& engine(getRenderEngine());
+    //ATRACE_INT("ljt",0);
+    //mSimilarityThread->setEnabled(false);
+    //mSimilarityThread->setEnabled(false);
+    //engine.readPixelsForSimilarity();
+    //ATRACE_INT("ljt",1);
+    //mSimilarityThread->setEnabled(true);
+    
 }
 
 bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty)
@@ -3879,6 +3896,35 @@ SurfaceFlinger::DisplayDeviceState::DisplayDeviceState(DisplayDevice::DisplayTyp
     frame.makeInvalid();
 }
 
+SurfaceFlinger::SimilarityThread::SimilarityThread(RenderEngine& engine/*HWComposer& hwc*/)
+    : mEngineInSimilarity(engine),mEnabled(false)
+{
+}
+
+void SurfaceFlinger::SimilarityThread::setEnabled(bool enabled) {
+    Mutex::Autolock _l(mLock);
+    if (mEnabled != enabled) {
+        mEnabled = enabled;
+        mCondition.signal();
+    }
+}
+
+void SurfaceFlinger::SimilarityThread::onFirstRef() {
+    run("SimilarityThread", PRIORITY_URGENT_DISPLAY + PRIORITY_MORE_FAVORABLE);
+    //context = Stabilizer_initizlize(RUNNING_TYPE_GPU_WITH_EGL, 768, 512, IMAGE_RGBA8888);
+}
+
+bool SurfaceFlinger::SimilarityThread::threadLoop() {
+    { // scope for lock
+        Mutex::Autolock _l(mLock);
+        while (!mEnabled) {
+            mCondition.wait(mLock);
+        }
+    }    
+    //mEngineInSimilarity.checkSimilarity();
+    //ALOGD("djw: similarityThread execute ++!");
+    return true;
+}
 // ---------------------------------------------------------------------------
 
 }; // namespace android

@@ -65,6 +65,8 @@ protected:
     virtual void drawMeshLeftFBO(const Mesh& mesh);
     virtual void drawMeshRightFBO(const Mesh& mesh);
     virtual void enableRightFBO(bool key);
+    virtual bool checkSimilarity();
+    virtual void readPixelsForSimilarity();
     virtual void beginGroup(const mat4& colorTransform,int mode);
     virtual void endGroup(int mode);
 #else

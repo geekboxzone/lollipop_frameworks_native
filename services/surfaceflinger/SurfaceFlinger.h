@@ -165,6 +165,25 @@ public:
     */
     HWComposer& getHwComposer() const { return *mHwc; }
 
+    class SimilarityThread : public Thread {
+        //HWComposer& mHwc;
+        RenderEngine& mEngineInSimilarity;
+        //void * context;
+        mutable Mutex mLock;
+        Condition mCondition;
+        bool mEnabled;
+        //mutable nsecs_t mNextFakeVSync;
+        //nsecs_t mRefreshPeriod;
+        virtual void onFirstRef();
+        virtual bool threadLoop();
+    public:
+        SimilarityThread(RenderEngine& engine/*HWComposer& hwc*/);
+        void setEnabled(bool enabled);
+    };
+
+    sp<SimilarityThread> mSimilarityThread;
+    //void * similarityContext;
+    
 private:
     friend class Client;
     friend class DisplayEventConnection;
@@ -214,7 +233,9 @@ private:
     /* ------------------------------------------------------------------------
      * IBinder interface
      */
+#ifdef ENABLE_VR
     void setListState(char *name, bool state);
+#endif
     virtual status_t onTransact(uint32_t code, const Parcel& data,
         Parcel* reply, uint32_t flags);
     virtual status_t dump(int fd, const Vector<String16>& args);

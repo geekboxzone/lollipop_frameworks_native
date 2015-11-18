@@ -107,6 +107,8 @@ public:
     virtual void drawMeshLeftFBO(const Mesh& mesh) = 0;
     virtual void drawMeshRightFBO(const Mesh& mesh) = 0;
     virtual void enableRightFBO(bool key) = 0;
+    virtual bool checkSimilarity()=0;
+    virtual void readPixelsForSimilarity()=0;
     // grouping
     // creates a color-transform group, everything drawn in the group will be
     // transformed by the given color transform when endGroup() is called.

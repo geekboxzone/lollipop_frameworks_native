@@ -34,7 +34,7 @@ LOCAL_SRC_FILES:= \
     RenderEngine/Texture.cpp \
     RenderEngine/GLES10RenderEngine.cpp \
     RenderEngine/GLES11RenderEngine.cpp \
-    RenderEngine/GLES20RenderEngine.cpp
+    RenderEngine/GLES20RenderEngine.cpp 
 
 
 LOCAL_CFLAGS:= -DLOG_TAG=\"SurfaceFlinger\"
@@ -142,7 +142,7 @@ LOCAL_SHARED_LIBRARIES := \
 	libbinder \
 	libui \
 	libgui \
-	libpowermanager
+	libpowermanager 
 
 LOCAL_MODULE:= libsurfaceflinger
 

@@ -18,6 +18,8 @@
 #ifndef SF_GLES20RENDERENGINE_H_
 #define SF_GLES20RENDERENGINE_H_
 
+typedef unsigned int uint32_t;
+
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -48,7 +50,33 @@ class GLES20RenderEngine : public RenderEngine {
     GLuint tname, name;
     GLuint leftFbo, leftTex;
     GLuint rightFbo, rightTex;
+    GLuint checkLeftTex,checkRightTex;
+    GLuint checkLeftFBO,checkRightFBO;
+    GLboolean is3dApp;
+    GLuint checkRate;
+    GLuint checkBegin;
     bool useRightFBO;
+    void * context;
+    uint32_t * leftCheck;
+    uint32_t * rightCheck;
+
+    struct VRInfoTable {
+        GLuint VRMeshBuffer;
+        GLuint VRMeshCheckBuffer;
+        
+        GLuint leftFbo, leftTex;
+        GLuint rightFbo, rightTex;
+        
+        GLuint checkLeftTex,checkLeftFBO;
+        GLuint checkRightTex,checkRightFBO;
+        
+        uint32_t * checkLeftPtr;
+        uint32_t * checkRightPtr;
+
+        GLuint fboWidth,fboHeight;
+        
+        GLboolean is3dApp;
+    } mVRInfoTable;
     
     struct Group {
         GLuint texture;
@@ -85,24 +113,32 @@ protected:
     virtual void drawMesh(const Mesh& mesh);
 
 #ifdef ENABLE_VR
+    virtual void initVRInfoTable();
     virtual void drawMeshLeftEye();
     virtual void drawMeshRightEye();
     
     virtual void drawMeshLeftFBO(const Mesh& mesh);
     virtual void drawMeshRightFBO(const Mesh& mesh);
+
+    virtual void drawMeshLeftCheckFBO(const Mesh& mesh);
+    virtual void drawMeshRightCheckFBO(const Mesh& mesh);
     
+    virtual bool isSimilaryImages(const uint32_t* frame1,const uint32_t * frame2);
     virtual void enableShaderTexArray();
     virtual void enableShaderVerArray(int mode);
-
+    virtual GLuint genCheckFBOMeshBuffer();
     virtual GLuint genVRMeshBuffer(float halfWidth,float halfHeight);
     virtual vec2 genDeformTex(vec2 tex,float k1,float k2);
     
     virtual void enableRightFBO(bool key);
+    virtual bool checkSimilarity();
     
     virtual bool checkVRPropertyChanged();
-    
+    virtual bool testSimilartiy();
+    virtual void readPixelsForSimilarity();
     virtual void beginGroup(const mat4& colorTransform,int mode);
     virtual void endGroup(int mode);
+    
 #else
     virtual void beginGroup(const mat4& colorTransform);
     virtual void endGroup();

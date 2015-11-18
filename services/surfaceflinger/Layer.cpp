@@ -776,16 +776,102 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
     char value[PROPERTY_VALUE_MAX];
     property_get("sys.3d.height", value, "0.5");
     float heightScale = atof(value);
-        
+    
+    vec2 margin = vec2(1.0, 1.0);
+    
+    /*********displayStereo==1***********/
+    //fake-3d layer
     if((1==displayStereo && !alreadyStereo)) {
+        
+        position[0].x = position[0].x * 0.5;
+        position[1].x = position[1].x * 0.5;
+        position[2].x = position[2].x * 0.5;
+        position[3].x = position[3].x * 0.5;
 
-        position[0].y = position[0].y * 0.5;
-        position[1].y = position[1].y * 0.5;
-        position[2].y = position[2].y * 0.5;
-        position[3].y = position[3].y * 0.5;
+        position[0].y = position[0].y * heightScale;
+        position[1].y = position[1].y * heightScale;
+        position[2].y = position[2].y * heightScale;
+        position[3].y = position[3].y * heightScale;
 
+        position[0] = position[0] + margin;
+        position[1] = position[1] + margin;
+        position[2] = position[2] + margin;
+        position[3] = position[3] + margin;
+
+        texCoords[0] = vec2(0, 1);
+        texCoords[1] = vec2(0, 0);
+        texCoords[2] = vec2(1, 0);
+        texCoords[3] = vec2(1, 1);
+
+        engine.drawMeshLeftFBO(mMesh);
+        
     }
 
+    //real-3d layer
+    if(1==displayStereo && 1 == alreadyStereo) {    
+        engine.enableRightFBO(true);
+        
+        position[0].x = position[0].x * 0.5;
+        position[1].x = position[1].x * 0.5;
+        position[2].x = position[2].x * 0.5;
+        position[3].x = position[3].x * 0.5;
+
+        position[0].y = position[0].y * heightScale;
+        position[1].y = position[1].y * heightScale;
+        position[2].y = position[2].y * heightScale;
+        position[3].y = position[3].y * heightScale;
+
+        position[0] = position[0] + margin;
+        position[1] = position[1] + margin;
+        position[2] = position[2] + margin;
+        position[3] = position[3] + margin;
+
+        texCoords[0] = vec2(0, 1);
+        texCoords[1] = vec2(0, 0);
+        texCoords[2] = vec2(0.5, 0);
+        texCoords[3] = vec2(0.5, 1);
+
+        engine.drawMeshLeftFBO(mMesh);
+
+        texCoords[0] = vec2(0.5, 1);
+        texCoords[1] = vec2(0.5, 0);
+        texCoords[2] = vec2(1, 0);
+        texCoords[3] = vec2(1, 1);
+
+        engine.drawMeshRightFBO(mMesh);
+        
+    }
+
+    //fake-3d layer which come with real-3D layer,we have set 2 to alreadyStereo before
+    if(1==displayStereo && 2 == alreadyStereo) {
+        engine.enableRightFBO(true);
+        
+        position[0].x = position[0].x * 0.5;
+        position[1].x = position[1].x * 0.5;
+        position[2].x = position[2].x * 0.5;
+        position[3].x = position[3].x * 0.5;
+
+        position[0].y = position[0].y * heightScale;
+        position[1].y = position[1].y * heightScale;
+        position[2].y = position[2].y * heightScale;
+        position[3].y = position[3].y * heightScale;
+
+        position[0] = position[0] + margin;
+        position[1] = position[1] + margin;
+        position[2] = position[2] + margin;
+        position[3] = position[3] + margin;
+ 
+        texCoords[0] = vec2(0, 1);
+        texCoords[1] = vec2(0, 0);
+        texCoords[2] = vec2(1, 0);
+        texCoords[3] = vec2(1, 1);
+
+        engine.drawMeshLeftFBO(mMesh);
+        engine.drawMeshRightFBO(mMesh);
+    }
+    /*********displayStereo==1 ends***********/
+
+    /*********displayStereo==2***********/
     //fake-3d layer
     if((2==displayStereo && !alreadyStereo)) {
         
@@ -799,6 +885,11 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[1].x = position[1].x * heightScale;
         position[2].x = position[2].x * heightScale;
         position[3].x = position[3].x * heightScale;
+
+        position[0] = position[0] + margin;
+        position[1] = position[1] + margin;
+        position[2] = position[2] + margin;
+        position[3] = position[3] + margin;
 
         texCoords[0] = vec2(0, 1);
         texCoords[1] = vec2(0, 0);
@@ -822,6 +913,11 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[1].x = position[1].x * heightScale;
         position[2].x = position[2].x * heightScale;
         position[3].x = position[3].x * heightScale;
+
+        position[0] = position[0] + margin;
+        position[1] = position[1] + margin;
+        position[2] = position[2] + margin;
+        position[3] = position[3] + margin;
 
         texCoords[0] = vec2(0, 1);
         texCoords[1] = vec2(0, 0);
@@ -852,6 +948,11 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[1].x = position[1].x * heightScale;
         position[2].x = position[2].x * heightScale;
         position[3].x = position[3].x * heightScale;
+
+        position[0] = position[0] + margin;
+        position[1] = position[1] + margin;
+        position[2] = position[2] + margin;
+        position[3] = position[3] + margin;
  
         texCoords[0] = vec2(0, 1);
         texCoords[1] = vec2(0, 0);
@@ -862,6 +963,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         engine.drawMeshRightFBO(mMesh);
         
     }
+    /*********displayStereo==2 ends***********/
 
     if(8 == displayStereo){
 
@@ -899,11 +1001,11 @@ void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
     char value[PROPERTY_VALUE_MAX];
     property_get("sys.hwc.force3d.primary", value, "0");
     int draw_flow = atoi(value);
-
+    /*
     if(draw_flow>0){
 #ifdef ENABLE_VR
         setStereoDraw(hw, engine, mMesh, 
-                /*mSurfaceFlingerConsumer->getAlreadyStereo()*/getStereoModeToDraw(), displayStereo);   
+                getStereoModeToDraw(), displayStereo);   
         mStereoMode = 0;
 #endif
     }
@@ -911,7 +1013,8 @@ void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
         engine.drawMesh(mMesh);
         property_set("debug.sf.deform","0");
     }
-    //engine.drawMesh(mMesh);
+    */
+    engine.drawMesh(mMesh);
 }
 
 void Layer::clearWithOpenGL(
