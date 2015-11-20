@@ -74,7 +74,7 @@
 #include "DisplayHardware/VirtualDisplaySurface.h"
 
 #include "Effects/Daltonizer.h"
-#include "stabilizer.h"
+//#include "stabilizer.h"
 
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
