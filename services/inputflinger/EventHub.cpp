@@ -1369,6 +1369,12 @@ void EventHub::createVirtualKeyboardLocked() {
 }
 
 void EventHub::addDeviceLocked(Device* device) {
+    /**xzj add start to filter repeat device*/
+    Device* targetDevice = getDeviceByPathLocked(device->path.string());
+    if(targetDevice){
+    	return;
+    }
+    /**end*/
     mDevices.add(device->id, device);
     device->next = mOpeningDevices;
     mOpeningDevices = device;
