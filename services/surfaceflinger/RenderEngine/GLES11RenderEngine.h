@@ -61,12 +61,11 @@ protected:
     virtual void disableBlending();
 
     virtual void drawMesh(const Mesh& mesh);
-#ifdef ENABLE_VR    
+#ifdef ENABLE_VR
     virtual void drawMeshLeftFBO(const Mesh& mesh);
     virtual void drawMeshRightFBO(const Mesh& mesh);
     virtual void enableRightFBO(bool key);
-    virtual bool checkSimilarity();
-    virtual void readPixelsForSimilarity();
+	virtual void clearFbo();
     virtual void beginGroup(const mat4& colorTransform,int mode);
     virtual void endGroup(int mode);
 #else

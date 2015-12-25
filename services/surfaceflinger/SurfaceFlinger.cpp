@@ -162,7 +162,7 @@ SurfaceFlinger::SurfaceFlinger()
         mDelayFlag(0)
 {
     ALOGI("SurfaceFlinger is starting");
-    
+
     // debugging stuff...
     char value[PROPERTY_VALUE_MAX];
 
@@ -186,20 +186,20 @@ SurfaceFlinger::SurfaceFlinger()
     ALOGI_IF(mDebugDDMS, "DDMS debugging enabled");
 
     /**
-     * .DP : original_display : 
-     *      原始状态的 display, 长度, 高度, orientation 等配置, 由 kernel 层的对应 device 指定. 
+     * .DP : original_display :
+     *      原始状态的 display, 长度, 高度, orientation 等配置, 由 kernel 层的对应 device 指定.
      *
      * .DP : display_pre_rotation_extension; pre_rotation; pre_rotated_display, display_saw_by_sf_clients :
-     *      display_pre_rotation_extension 是 对 android 框架的扩展, 可以实现对 primary_display 的预旋转 (pre_rotation).  
-     *      pre_rotation 之后, sf(surface_flinger) 的 client (boot_animation, window_manager_service, ...) 看到的 primary_display, 
-     *      将是预旋转之后的 display, 记为 pre_rotated_display 或 display_saw_by_sf_clients. 
-     *      设备开发人员可以通过 属性 "ro.sf.hwrotation", 来配置 pre_rotation 的具体角度, 参见对 property_hwrotation 的说明. 
-     *      本扩展目前仅对 primary_display 有效. 
+     *      display_pre_rotation_extension 是 对 android 框架的扩展, 可以实现对 primary_display 的预旋转 (pre_rotation).
+     *      pre_rotation 之后, sf(surface_flinger) 的 client (boot_animation, window_manager_service, ...) 看到的 primary_display,
+     *      将是预旋转之后的 display, 记为 pre_rotated_display 或 display_saw_by_sf_clients.
+     *      设备开发人员可以通过 属性 "ro.sf.hwrotation", 来配置 pre_rotation 的具体角度, 参见对 property_hwrotation 的说明.
+     *      本扩展目前仅对 primary_display 有效.
      */
 
     /**
-     * .DP : ro.sf.hwrotation, property_hwrotation : 
-     *      display_pre_rotation_extension 引入的, 系统预定义的 ro property, 定义在文件 /system/build.prop 中. 
+     * .DP : ro.sf.hwrotation, property_hwrotation :
+     *      display_pre_rotation_extension 引入的, 系统预定义的 ro property, 定义在文件 /system/build.prop 中.
      *      用来描述希望在 original_display 上执行的 预旋转(pre_rotation) 在 顺时针方向上的 角度.
      *      可能的取值是 0, 90, 180, 270.
      */
@@ -537,7 +537,7 @@ void SurfaceFlinger::init() {
     mWfdOptimize = atoi(value);
 
     //mSimilarityThread  = new SimilarityThread(*mRenderEngine);
-    
+
     // start boot animation
     startBootAnim();
 }
@@ -632,7 +632,7 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
 
     const Vector<HWComposer::DisplayConfig>& hwConfigs =        // hwc_display_config_list
             getHwComposer().getConfigs(type);
-    for (size_t c = 0; c < hwConfigs.size(); ++c) 
+    for (size_t c = 0; c < hwConfigs.size(); ++c)
     {
         const HWComposer::DisplayConfig& hwConfig = hwConfigs[c];   // current_hwc_display_config
         DisplayInfo info = DisplayInfo();   // current_display_info
@@ -645,7 +645,7 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
 
         /* 若当前 display 是 primary_display, 则... */
         if (type == DisplayDevice::DISPLAY_PRIMARY) {
-            // The density of the device 
+            // The density of the device
             // is provided by a build property
             float density = Density::getBuildDensity() / 160.0f;
             if (density == 0) {
@@ -664,16 +664,16 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
             // TODO: this needs to go away (currently needed only by webkit)
             sp<const DisplayDevice> hw(getDefaultDisplayDevice());
             info.orientation = hw->getOrientation();
-            
+
             /* 若 display_saw_by_sf_clients 和 original_display 的 宽高信息要对调, 则... */
-            if ( orientationSwap() ) 
+            if ( orientationSwap() )
             {
                 xdpi = hwc.getDpiY(type);
                 ydpi = hwc.getDpiX(type);
                 info.w = hwc.getHeight(type);
                 info.h = hwc.getWidth(type);
             }
-        } 
+        }
         /* 否则, 即当前 display "不是" primary_display, ... */
         else {
             // TODO: where should this value come from?
@@ -2012,7 +2012,7 @@ void SurfaceFlinger::invalidateHwcGeometry()
 
 void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
         const Region& inDirtyRegion)
-{   
+{
     ATRACE_CALL();
     // We only need to actually compose the display if:
     // 1) It is being handled by hardware composer, which may need this to
@@ -2113,15 +2113,13 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     // swap buffers (presentation)
     hw->swapBuffers(getHwComposer());
 
-    //**** Similarity test ****    
-    //RenderEngine& engine(getRenderEngine());
-    //ATRACE_INT("ljt",0);
-    //mSimilarityThread->setEnabled(false);
-    //mSimilarityThread->setEnabled(false);
-    //engine.readPixelsForSimilarity();
-    //ATRACE_INT("ljt",1);
-    //mSimilarityThread->setEnabled(true);
-    
+#ifdef ENABLE_VR
+    if(temp){
+        RenderEngine& engine(getRenderEngine());
+        engine.clearFbo();
+    }
+#endif
+
 }
 
 bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty)
@@ -3112,12 +3110,12 @@ bool SurfaceFlinger::startDdmConnection()
 
 #ifdef ENABLE_VR
 void SurfaceFlinger::setListState(char *name, bool state)
-{   
+{
     struct app_info_t {
         char name[100];
     };
     struct app_info_t app_info[100] = {0};
-    
+
     if (name != NULL)
     {
         FILE *fp = NULL;
@@ -3920,7 +3918,7 @@ bool SurfaceFlinger::SimilarityThread::threadLoop() {
         while (!mEnabled) {
             mCondition.wait(mLock);
         }
-    }    
+    }
     //mEngineInSimilarity.checkSimilarity();
     //ALOGD("djw: similarityThread execute ++!");
     return true;

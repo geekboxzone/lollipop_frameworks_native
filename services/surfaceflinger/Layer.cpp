@@ -581,7 +581,7 @@ void Layer::setPerFrameData(const sp<const DisplayDevice>& hw,
     }
     layer.setLayername(getName().string());
     layer.setAlreadyStereo(mSurfaceFlingerConsumer->getAlreadyStereo());
-    
+
 }
 
 void Layer::setAcquireFence(const sp<const DisplayDevice>& /* hw */,
@@ -616,7 +616,7 @@ void Layer::setDisplayStereo(const sp<const DisplayDevice>& hw,
 }
 
 int32_t Layer::getAlreadyStereo(const sp<const DisplayDevice>& hw,
-        HWComposer::HWCLayerInterface& layer) {    
+        HWComposer::HWCLayerInterface& layer) {
     return layer.getAlreadyStereo();
 }
 
@@ -765,24 +765,89 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
 
 
 #ifdef ENABLE_VR
+void print3dLog(int alreadyStereo, int displayStereo){
+    //The other part of 3d log is written in GLES20RenderEngine.
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.3d.log", value, "0");
+    int log3d = atoi(value);
+    if(1==log3d){
+        int temp;
+        ALOGD("3dlog:(setStereoDraw):==========================3D Log============================");
+        ALOGD("3dlog:(setStereoDraw):***Stereo Draw Flow:");
+        ALOGD("3dlog:(setStereoDraw):  alreadyStereo = %d   displayStereo = %d",alreadyStereo,displayStereo);
+
+        //Distortion property value
+        property_get("sys.3d.deform_red1", value, "0");
+        float rk1 = atof(value);
+        property_get("sys.3d.deform_red2", value, "0");
+        float rk2 = atof(value);
+        property_get("sys.3d.deform_green1", value, "0");
+        float gk1 = atof(value);
+        property_get("sys.3d.deform_green2", value, "0");
+        float gk2 = atof(value);
+        property_get("sys.3d.deform_blue1", value, "0");
+        float bk1 = atof(value);
+        property_get("sys.3d.deform_blue2", value, "0");
+        float bk2 = atof(value);
+        ALOGD("3dlog:(setStereoDraw):***Distortion Arguments:");
+        property_get("debug.sf.dispersion", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  Light Dispersion-------------%d",temp);
+        ALOGD("3dlog:(setStereoDraw):  red:   k1 = %f,    k2 = %f",rk1,rk2);
+        ALOGD("3dlog:(setStereoDraw):  green: k1 = %f,    k2 = %f",gk1,gk2);
+        ALOGD("3dlog:(setStereoDraw):  blue:  k1 = %f,    k2 = %f",bk1,bk2);
+
+        //IPD property value
+        ALOGD("3dlog:(setStereoDraw):***IPD Value:");
+        property_get("sys.3d.ipd_offset", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  ipd_offset mode:  IPD = %d",temp);
+        property_get("sys.3d.ipd_scale", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  ipd_scale  mode:  IPD = %d",temp);
+        property_get("sys.game.3d.depth", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  Enhanced3D mode:  IPD = %d",temp);
+
+        //3D property value
+        ALOGD("3dlog:(setStereoDraw):***3D Property Value:");
+        property_get("sys.hwc.force3d.primary", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  sys.hwc.force3d.primary------%d",temp);
+        property_get("sys.game.3d", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  sys.game.3d------------------%d",temp);
+        property_get("sys.hwc.compose_policy", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  sys.hwc.compose_policy-------%d",temp);
+        property_get("debug.sf.deform", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  debug.sf.deform--------------%d",temp);
+        property_get("debug.sf.dispersion", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  debug.sf.dispersion----------%d",temp);
+
+    }
+}
+
 void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
 	Mesh& mMesh, int alreadyStereo, int displayStereo)
-{   
-    //ALOGD("djw:alreadyStereo = %d,width=%d,height=%d",alreadyStereo,hw->getWidth(),hw->getHeight());
+{
     Mesh::VertexArray<vec2> position(mMesh.getPositionArray<vec2>());
     Mesh::VertexArray<vec2> texCoords(mMesh.getTexCoordArray<vec2>());
 
-    property_set("debug.sf.deform","1");
     char value[PROPERTY_VALUE_MAX];
     property_get("sys.3d.height", value, "0.5");
     float heightScale = atof(value);
-    
+    property_get("sys.3d.on_off", value, "1");
+    int vrSwitch = atoi(value);
+
     vec2 margin = vec2(1.0, 1.0);
-    
+
     /*********displayStereo==1***********/
     //fake-3d layer
-    if((1==displayStereo && !alreadyStereo)) {
-        
+    if((1==displayStereo && !alreadyStereo) && (1 == vrSwitch)){
+
         position[0].x = position[0].x * 0.5;
         position[1].x = position[1].x * 0.5;
         position[2].x = position[2].x * 0.5;
@@ -804,13 +869,13 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         texCoords[3] = vec2(1, 1);
 
         engine.drawMeshLeftFBO(mMesh);
-        
+
     }
 
     //real-3d layer
-    if(1==displayStereo && 1 == alreadyStereo) {    
+    if((1==displayStereo && 1 == alreadyStereo)) {
         engine.enableRightFBO(true);
-        
+
         position[0].x = position[0].x * 0.5;
         position[1].x = position[1].x * 0.5;
         position[2].x = position[2].x * 0.5;
@@ -831,21 +896,21 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         texCoords[2] = vec2(0.5, 0);
         texCoords[3] = vec2(0.5, 1);
 
-        engine.drawMeshLeftFBO(mMesh);
+        engine.drawMeshRightFBO(mMesh);
 
         texCoords[0] = vec2(0.5, 1);
         texCoords[1] = vec2(0.5, 0);
         texCoords[2] = vec2(1, 0);
         texCoords[3] = vec2(1, 1);
 
-        engine.drawMeshRightFBO(mMesh);
-        
+        engine.drawMeshLeftFBO(mMesh);
+
     }
 
     //fake-3d layer which come with real-3D layer,we have set 2 to alreadyStereo before
-    if(1==displayStereo && 2 == alreadyStereo) {
+    if((1==displayStereo && 2 == alreadyStereo) && (1 == vrSwitch)) {
         engine.enableRightFBO(true);
-        
+
         position[0].x = position[0].x * 0.5;
         position[1].x = position[1].x * 0.5;
         position[2].x = position[2].x * 0.5;
@@ -860,7 +925,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[1] = position[1] + margin;
         position[2] = position[2] + margin;
         position[3] = position[3] + margin;
- 
+
         texCoords[0] = vec2(0, 1);
         texCoords[1] = vec2(0, 0);
         texCoords[2] = vec2(1, 0);
@@ -873,9 +938,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
 
     /*********displayStereo==2***********/
     //fake-3d layer
-    if((2==displayStereo && !alreadyStereo)) {
-        
-        
+    if((2==displayStereo && !alreadyStereo) && (1 == vrSwitch)) {
         position[0].y = position[0].y * 0.5;
         position[1].y = position[1].y * 0.5;
         position[2].y = position[2].y * 0.5;
@@ -897,13 +960,13 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         texCoords[3] = vec2(1, 1);
 
         engine.drawMeshLeftFBO(mMesh);
-        
+
     }
 
     //real-3d layer
-    if(2==displayStereo && 1 == alreadyStereo) {    
+    if((2==displayStereo && 1 == alreadyStereo) || (0 == vrSwitch)){
         engine.enableRightFBO(true);
-        
+
         position[0].y = position[0].y * 0.5;
         position[1].y = position[1].y * 0.5;
         position[2].y = position[2].y * 0.5;
@@ -924,21 +987,22 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         texCoords[2] = vec2(0.5, 0);
         texCoords[3] = vec2(0.5, 1);
 
-        engine.drawMeshLeftFBO(mMesh);
+        engine.drawMeshRightFBO(mMesh);
 
         texCoords[0] = vec2(0.5, 1);
         texCoords[1] = vec2(0.5, 0);
         texCoords[2] = vec2(1, 0);
         texCoords[3] = vec2(1, 1);
 
-        engine.drawMeshRightFBO(mMesh);
-        
+        engine.drawMeshLeftFBO(mMesh);
+
     }
 
     //fake-3d layer which come with real-3D layer,we have set 2 to alreadyStereo before
-    if(2==displayStereo && 2 == alreadyStereo) {
+    if((2==displayStereo && 2 == alreadyStereo) && (1 == vrSwitch)) {
+
         engine.enableRightFBO(true);
-        
+
         position[0].y = position[0].y * 0.5;
         position[1].y = position[1].y * 0.5;
         position[2].y = position[2].y * 0.5;
@@ -953,7 +1017,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[1] = position[1] + margin;
         position[2] = position[2] + margin;
         position[3] = position[3] + margin;
- 
+
         texCoords[0] = vec2(0, 1);
         texCoords[1] = vec2(0, 0);
         texCoords[2] = vec2(1, 0);
@@ -961,12 +1025,11 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
 
         engine.drawMeshLeftFBO(mMesh);
         engine.drawMeshRightFBO(mMesh);
-        
+
     }
     /*********displayStereo==2 ends***********/
 
     if(8 == displayStereo){
-
         position[0].y /= 2;
         position[1].y /= 2;
         position[2].y /= 2;
@@ -987,7 +1050,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[2].y += 45;
         position[3].y += 45;
     }
-    
+
 }
 #endif
 void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
@@ -997,15 +1060,15 @@ void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
     RenderEngine& engine(mFlinger->getRenderEngine());
     computeGeometry(hw, mMesh, false);
     engine.setupFillWithColor(red, green, blue, alpha);
-    
+
     char value[PROPERTY_VALUE_MAX];
     property_get("sys.hwc.force3d.primary", value, "0");
     int draw_flow = atoi(value);
     /*
     if(draw_flow>0){
 #ifdef ENABLE_VR
-        setStereoDraw(hw, engine, mMesh, 
-                getStereoModeToDraw(), displayStereo);   
+        setStereoDraw(hw, engine, mMesh,
+                getStereoModeToDraw(), displayStereo);
         mStereoMode = 0;
 #endif
     }
@@ -1048,7 +1111,7 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
     float top    = float(win.top)    / float(s.active.h);
     float right  = float(win.right)  / float(s.active.w);
     float bottom = float(win.bottom) / float(s.active.h);
-    
+
     // TODO: we probably want to generate the texture coords with the mesh
     // here we assume that we only have 4 vertices
     Mesh::VertexArray<vec2> texCoords(mMesh.getTexCoordArray<vec2>());
@@ -1061,21 +1124,22 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
     engine.setupLayerBlending(mPremultipliedAlpha, isOpaque(s), s.alpha);
 
 #ifdef ENABLE_VR
+    print3dLog(getStereoModeToDraw(), displayStereo);
     char value[PROPERTY_VALUE_MAX];
     property_get("sys.hwc.force3d.primary", value, "0");
     int draw_flow = atoi(value);
     if(draw_flow>0){
-        setStereoDraw(hw, engine, mMesh, 
-                /*mSurfaceFlingerConsumer->getAlreadyStereo()*/getStereoModeToDraw(), displayStereo);   
+        setStereoDraw(hw, engine, mMesh,
+                /*mSurfaceFlingerConsumer->getAlreadyStereo()*/getStereoModeToDraw(), displayStereo);
         mStereoMode = 0;
     }
     else{
-        engine.drawMesh(mMesh);
         property_set("debug.sf.deform","0");
+        engine.drawMesh(mMesh);
     }
 #else
     engine.drawMesh(mMesh);
-#endif    
+#endif
 
     engine.disableBlending();
 }

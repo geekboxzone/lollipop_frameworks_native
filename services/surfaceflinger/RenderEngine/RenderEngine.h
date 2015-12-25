@@ -24,7 +24,7 @@
 #include <EGL/eglext.h>
 #include <ui/mat4.h>
 #include <Transform.h>
-typedef unsigned int GLuint; 
+typedef unsigned int GLuint;
 #define EGL_NO_CONFIG ((EGLConfig)0)
 
 // ---------------------------------------------------------------------------
@@ -103,15 +103,14 @@ public:
 
     // drawing
     virtual void drawMesh(const Mesh& mesh) = 0;
-#ifdef ENABLE_VR    
+#ifdef ENABLE_VR
     virtual void drawMeshLeftFBO(const Mesh& mesh) = 0;
     virtual void drawMeshRightFBO(const Mesh& mesh) = 0;
     virtual void enableRightFBO(bool key) = 0;
-    virtual bool checkSimilarity()=0;
-    virtual void readPixelsForSimilarity()=0;
     // grouping
     // creates a color-transform group, everything drawn in the group will be
     // transformed by the given color transform when endGroup() is called.
+    virtual void clearFbo() = 0;
     virtual void beginGroup(const mat4& colorTransform,int mode) = 0;
     virtual void endGroup(int mode) = 0;
 #else

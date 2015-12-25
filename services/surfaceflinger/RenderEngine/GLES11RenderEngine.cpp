@@ -274,10 +274,7 @@ void GLES11RenderEngine::drawMeshRightFBO(const Mesh& mesh){
 }
 void GLES11RenderEngine::enableRightFBO(bool key){
 }
-bool GLES11RenderEngine::checkSimilarity(){
-    return true;
-}
-void GLES11RenderEngine::readPixelsForSimilarity(){
+void GLES11RenderEngine::clearFbo(){
 }
 void GLES11RenderEngine::beginGroup(const mat4& ,int mode) {
     // doesn't do anything in GLES 1.1
