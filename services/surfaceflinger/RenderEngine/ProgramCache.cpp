@@ -163,12 +163,12 @@ String8 ProgramCache::generateVertexShader(const Key& needs) {
         vs  << "attribute vec4 texCoords;"
             << "attribute vec4 texCoords_r;"
             << "attribute vec4 texCoords_g;"
-            << "attribute vec4 texCoords_b;"            
-            
+            << "attribute vec4 texCoords_b;"
+
             << "varying vec2 outTexCoords_r;"
             << "varying vec2 outTexCoords_g;"
             << "varying vec2 outTexCoords_b;"
-            
+
             << "varying vec2 outTexCoords;";
     }
     vs << "attribute vec4 position;"
@@ -223,20 +223,34 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
     if (needs.isTexturing()) {
 #ifdef ENABLE_VR
         if(needs.hasDeform())
-        {                 
+        {
             if(needs.hasDispersion()){
                 //fs << "if(outTexCoords_r.x>=0.0 && outTexCoords_r.x<=1.0 && outTexCoords_r.y>=0.0 && outTexCoords_r.y<=1.0)";
                 //fs << "if(outTexCoords_g.x>=0.0 && outTexCoords_g.x<=1.0 && outTexCoords_g.y>=0.0 && outTexCoords_g.y<=1.0)";
-                //fs << "if(outTexCoords_b.y>=0.0 && outTexCoords_b.y<=1.0){";            
-                fs << "gl_FragColor.r = texture2D(sampler, outTexCoords_r).r;";
-                fs << "gl_FragColor.g = texture2D(sampler, outTexCoords_g).g;";
-                fs << "gl_FragColor.b = texture2D(sampler, outTexCoords_b).b;";
+                //fs << "if(outTexCoords_b.y>=0.0 && outTexCoords_b.y<=1.0){";
+                fs << "float scale = 20.0;";
+                fs << "float fade_top    = clamp(       outTexCoords_r.y  * scale,0.0,1.0);";
+                fs << "float fade_bottom = clamp((1.0 - outTexCoords_r.y) * scale,0.0,1.0);";
+                fs << "float fade_left   = clamp(       outTexCoords_r.x  * scale,0.0,1.0);";
+                fs << "float fade_right  = clamp((1.0 - outTexCoords_r.x) * scale,0.0,1.0);";
+                fs << "float fade = fade_top * fade_bottom * fade_left * fade_right;";
+
+                fs << "gl_FragColor.r = texture2D(sampler, outTexCoords_r).r * fade;";
+                fs << "gl_FragColor.g = texture2D(sampler, outTexCoords_g).g * fade;";
+                fs << "gl_FragColor.b = texture2D(sampler, outTexCoords_b).b * fade;";
                 fs << "gl_FragColor.a = 1.0;";
                 //fs << "}else{";
                 //fs << "   gl_FragColor = vec4(0.0,0.0,0.0,0.0);";
                 //fs << "}";
             }else{
-                fs << "gl_FragColor   = texture2D(sampler, outTexCoords_r);";
+                fs << "float scale = 20.0;";
+                fs << "float fade_top    = clamp(       outTexCoords_r.y  * scale,0.0,1.0);";
+                fs << "float fade_bottom = clamp((1.0 - outTexCoords_r.y) * scale,0.0,1.0);";
+                fs << "float fade_left   = clamp(       outTexCoords_r.x  * scale,0.0,1.0);";
+                fs << "float fade_right  = clamp((1.0 - outTexCoords_r.x) * scale,0.0,1.0);";
+                fs << "float fade = fade_top * fade_bottom * fade_left * fade_right;";
+
+                fs << "gl_FragColor   = texture2D(sampler, outTexCoords_r) * fade;";
                 fs << "gl_FragColor.a = 1.0;";
             }
         }
@@ -260,8 +274,8 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
         } else {
             fs << "gl_FragColor.a *= alphaPlane;";
         }
-    }    
-    
+    }
+
     if (needs.hasColorMatrix()) {
         if (!needs.isOpaque() && needs.isPremultiplied()) {
             // un-premultiply if needed before linearization

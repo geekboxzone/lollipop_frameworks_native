@@ -2052,12 +2052,19 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     }
 #ifdef ENABLE_VR
     char value[PROPERTY_VALUE_MAX];
-    property_get("debug.sf.deform", value, "0");
+    property_get("sys.hwc.force3d.primary", value, "0");
     int temp = atoi(value);
-    if(temp)
+    if(temp){
         mDeform = true;
-    else
+        property_set("sys.3d.layer.flow","1");
+        property_set("sys.hwc.compose_policy","0");
+        property_set("sys.game.3d","1");
+    }else{
         mDeform = false;
+        property_set("sys.3d.layer.flow","0");
+        property_set("sys.hwc.compose_policy","6");
+        property_set("sys.game.3d","0");
+    }
     if (CC_LIKELY(!mDaltonize && !mHasColorMatrix)) {
         if(mDeform)
         {
@@ -3323,22 +3330,6 @@ status_t SurfaceFlinger::onTransact(
 
                 return NO_ERROR;
             }
-            /*
-            case 2002: {// adjust argu of deform
-                deformArgu = data.readFloat();// > 0.0
-                char *buffer = new char[30];
-                sprintf(buffer,"%f",deformArgu);
-                property_set("debug.sf.deform_argu",buffer);
-                return NO_ERROR;
-            }
-            case 2003: {//adjust argu of height of stereo
-                StereoHeight = data.readFloat();// 0.0 ~ 1.0
-                char *buffer = new char[30];
-                sprintf(buffer,"%f",StereoHeight);
-                property_set("sys.3d.height",buffer);
-                return NO_ERROR;
-            }
-            */
 #endif
         }
     }

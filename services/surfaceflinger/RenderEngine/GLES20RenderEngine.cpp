@@ -20,8 +20,8 @@ typedef unsigned char uint8_t;
 #define Warp_Mesh_Resolution_X 64
 #define Warp_Mesh_Resolution_Y 64
 #define VR_Buffer_Stride 10
-#define Screen_X 1536.0f
-#define Screen_Y 2048.0f
+#define Screen_X 1440.0f
+#define Screen_Y 2560.0f
 #define Check_Width 8
 #define Check_Height 8
 #define Check_Len 8
@@ -76,12 +76,6 @@ GLES20RenderEngine::GLES20RenderEngine() :
 #ifdef ENABLE_VR
     initVRInfoTable();
     mVRInfoTable.VRMeshBuffer = genVRMeshBuffer(Screen_X,Screen_Y);
-    //mVRInfoTable.VRMeshCheckBuffer = genCheckFBOMeshBuffer();
-
-    //leftCheck  = new uint32_t[(int)Screen_X/2*(int)Screen_Y/4];
-    //leftCheck  = new uint32_t[Check_Width*Check_Height];
-    //rightCheck = new uint32_t[Check_Width*Check_Height];
-    //context = Stabilizer_initizlize(RUNNING_TYPE_GPU_WITH_EGL, 768, 512, IMAGE_RGBA8888);
 #endif
 
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mMaxTextureSize);

@@ -814,15 +814,15 @@ void print3dLog(int alreadyStereo, int displayStereo){
         property_get("sys.hwc.force3d.primary", value, "0");
         temp = atoi(value);
         ALOGD("3dlog:(setStereoDraw):  sys.hwc.force3d.primary------%d",temp);
+        property_get("sys.3d.layer.flow", value, "0");
+        temp = atoi(value);
+        ALOGD("3dlog:(setStereoDraw):  sys.3d.layer.flow------------%d",temp);
         property_get("sys.game.3d", value, "0");
         temp = atoi(value);
         ALOGD("3dlog:(setStereoDraw):  sys.game.3d------------------%d",temp);
         property_get("sys.hwc.compose_policy", value, "0");
         temp = atoi(value);
         ALOGD("3dlog:(setStereoDraw):  sys.hwc.compose_policy-------%d",temp);
-        property_get("debug.sf.deform", value, "0");
-        temp = atoi(value);
-        ALOGD("3dlog:(setStereoDraw):  debug.sf.deform--------------%d",temp);
         property_get("debug.sf.dispersion", value, "0");
         temp = atoi(value);
         ALOGD("3dlog:(setStereoDraw):  debug.sf.dispersion----------%d",temp);
@@ -1028,7 +1028,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
 
     }
     /*********displayStereo==2 ends***********/
-
+/*
     if(8 == displayStereo){
         position[0].y /= 2;
         position[1].y /= 2;
@@ -1050,7 +1050,7 @@ void setStereoDraw(const sp<const DisplayDevice>& hw, RenderEngine& engine,
         position[2].y += 45;
         position[3].y += 45;
     }
-
+*/
 }
 #endif
 void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
@@ -1062,7 +1062,7 @@ void Layer::clearWithOpenGL(const sp<const DisplayDevice>& hw,
     engine.setupFillWithColor(red, green, blue, alpha);
 
     char value[PROPERTY_VALUE_MAX];
-    property_get("sys.hwc.force3d.primary", value, "0");
+    property_get("sys.3d.layer.flow", value, "0");
     int draw_flow = atoi(value);
     /*
     if(draw_flow>0){
@@ -1126,21 +1126,19 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
 #ifdef ENABLE_VR
     print3dLog(getStereoModeToDraw(), displayStereo);
     char value[PROPERTY_VALUE_MAX];
-    property_get("sys.hwc.force3d.primary", value, "0");
+    property_get("sys.3d.layer.flow", value, "0");
     int draw_flow = atoi(value);
-    if(draw_flow>0){
+    if(draw_flow == 1){
         setStereoDraw(hw, engine, mMesh,
                 /*mSurfaceFlingerConsumer->getAlreadyStereo()*/getStereoModeToDraw(), displayStereo);
         mStereoMode = 0;
     }
     else{
-        property_set("debug.sf.deform","0");
         engine.drawMesh(mMesh);
     }
 #else
     engine.drawMesh(mMesh);
 #endif
-
     engine.disableBlending();
 }
 
